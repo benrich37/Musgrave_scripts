@@ -1,3 +1,3 @@
-# Musgrave_scripts
+# Musgrave Scripts
 
-read me
+1. CODEOWNERS
