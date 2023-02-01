@@ -17,7 +17,7 @@ def get_data(paths):
     return data, headers
 
 
-def plot_criteria_sets_2(data, headers, criteria_sets, save_dir):
+def plot_criteria_sets_2(data, headers, criteria_sets, save_dir, pc = True):
     """
     :param data:
     :param headers:
@@ -66,6 +66,9 @@ def plot_criteria_sets_2(data, headers, criteria_sets, save_dir):
         if type(xlims_i) == list:
             ax[0].set_xlim(xlims_i[0], xlims_i[1])
         plt.tight_layout()
-        fig.savefig(save_dir + '\\' + fname + '.png')
+        if pc:
+            fig.savefig(save_dir + '\\' + fname + '.png')
+        else:
+            fig.savefig(save_dir + '/' + fname + '.png')
     return plot_data
 

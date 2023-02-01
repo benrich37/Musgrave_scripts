@@ -19,15 +19,23 @@ ranges = [
     [-0.35, -0.2]
 ]
 
-path = 'C:\\Users\\User\\Desktop\\backup[s\\1-19-2023\\img_intrx\\calcs\\surfs'
+#path = 'C:\\Users\\User\\Desktop\\backup[s\\1-19-2023\\img_intrx\\calcs\\surfs'
+path = '/Users/richb/gc_backup/img_intrx/calcs/surfs/'
 os.chdir(path)
 
-file_Z12_None = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z12\\No_bias\\dosUp'
-file_Z20_None = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z20\\No_bias\\dosUp'
-file_Z28_None = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z28\\No_bias\\dosUp'
-file_Z12_0V = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z12\\No_bias\\dosUp'
-file_Z20_0V = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z20\\No_bias\\dosUp'
-file_Z28_0V = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z28\\No_bias\\dosUp'
+# file_Z12_None = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z12\\No_bias\\dosUp'
+# file_Z20_None = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z20\\No_bias\\dosUp'
+# file_Z28_None = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z28\\No_bias\\dosUp'
+# file_Z12_0V = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z12\\No_bias\\dosUp'
+# file_Z20_0V = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z20\\No_bias\\dosUp'
+# file_Z28_0V = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z28\\No_bias\\dosUp'
+
+file_Z12_None = path + 'Cu_Ap2-5_Bp2-5_Cp1-5_Z12/No_bias/dosUp'
+file_Z20_None = path + 'Cu_Ap2-5_Bp2-5_Cp1-5_Z20/No_bias/dosUp'
+file_Z28_None = path + 'Cu_Ap2-5_Bp2-5_Cp1-5_Z28/No_bias/dosUp'
+file_Z12_0V = path + 'Cu_Ap2-5_Bp2-5_Cp1-5_Z12/No_bias/dosUp'
+file_Z20_0V = path + 'Cu_Ap2-5_Bp2-5_Cp1-5_Z20/No_bias/dosUp'
+file_Z28_0V = path + 'Cu_Ap2-5_Bp2-5_Cp1-5_Z28/No_bias/dosUp'
 
 paths = [
     file_Z12_None,
@@ -74,7 +82,7 @@ criteria_sets = [
     criteria_1
 ]
 
-save_dir = 'C:\\Users\\User\\PycharmProjects\\Musgrave_scripts\\BenRich\\dos_analysis\\local_data'
-
+#save_dir = 'C:\\Users\\User\\PycharmProjects\\Musgrave_scripts\\BenRich\\dos_analysis\\local_data'
+save_dir = '/Users/richb/Musgrave_scripts/BenRich/dos_analysis/local'
 fns.plot_criteria_sets_2(data, headers, criteria_sets, save_dir)
 
