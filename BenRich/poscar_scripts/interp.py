@@ -507,6 +507,16 @@ class Poscar():
             center_idx.append(int(posn[i]*grid_dims[i]))
         return center_idx
 
+    def get_nearest_dist_in_idcs(self, grid_dims, atom_idx, atom_type = None):
+        center_idx = self.get_approx_atom_center_idx(grid_dims, atom_idx, atom_type=atom_type)
+        center_idcs = []
+        for i in range(len(self.posns)):
+            center_idcs.append(self.get_approx_atom_center_idx(grid_dims, i))
+        dists = []
+        for idx in center_idcs:
+            dists.append(np.linalg.norm(np.array(center_idx) - np.array(idx)))
+        return dists
+
 
 
     # def get_grid_centers_cart(self, grid_dims):
