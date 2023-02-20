@@ -1,5 +1,6 @@
 import os
 import json
+import misc_fns
 
 class surf():
     biases = []
@@ -13,17 +14,18 @@ class surf():
 
         self.find_biases()
         self.update_data()
-        self.dump_json()
+        #self.dump_json()
     def find_biases(self):
         if self.pc:
             #TODO
             return None
         else:
-            biases = os.listdir(self.surf_dir)
-            for b in biases:
-                if os.path.isdir(os.path.join(self.surf_dir, b)):
-                    self.biases.append(b)
-            print(self.biases)
+            self.biases = misc_fns.list_dirs(self.surf_dir)
+            # biases = os.listdir(self.surf_dir)
+            # for b in biases:
+            #     if os.path.isdir(os.path.join(self.surf_dir, b)):
+            #         self.biases.append(b)
+            # print(self.biases)
 
     def get_ecomp(self, dir):
         out = []
@@ -41,12 +43,15 @@ class surf():
         for i in range(len(self.biases)):
             self.data[self.biases[i]] = self.get_ecomp(str(self.surf_dir + '/' + self.biases[i]))
 
+    def return_dict(self):
+        return self.data
+
     def dump_json(self):
         with open(os.path.join(self.surf_dir, "data.json"), "w") as outfile:
             json.dump(self.data, outfile)
 
-os.chdir('/Users/richb/Desktop/Aziz Structures/MNCs/MN4C/pyridinic/backup-2.0/surfs/')
-test = surf('Pt', 'Pt')
+# os.chdir('/Users/richb/Desktop/Aziz Structures/MNCs/MN4C/pyridinic/backup-2.0/surfs/')
+# test = surf('Pt', 'Pt')
 
 
 

@@ -21,7 +21,7 @@ ranges = [
 
 #path = 'C:\\Users\\User\\Desktop\\backup[s\\1-19-2023\\img_intrx\\calcs\\surfs'
 path = '/Users/richb/gc_backup/img_intrx/calcs/surfs/'
-os.chdir(path)
+#os.chdir(path)
 
 # file_Z12_None = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z12\\No_bias\\dosUp'
 # file_Z20_None = 'Cu_Ap2-5_Bp2-5_Cp1-5_Z20\\No_bias\\dosUp'
@@ -84,5 +84,5 @@ criteria_sets = [
 
 #save_dir = 'C:\\Users\\User\\PycharmProjects\\Musgrave_scripts\\BenRich\\dos_analysis\\local_data'
 save_dir = '/Users/richb/Musgrave_scripts/BenRich/dos_analysis/local'
-fns.plot_criteria_sets_2(data, headers, criteria_sets, save_dir)
+fns.plot_criteria_sets_2(data, headers, criteria_sets, save_dir, pc = False)
 
