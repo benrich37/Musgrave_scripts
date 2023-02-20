@@ -24,9 +24,38 @@ class Poscar():
     has_atom_ids = True
     frac_to_cart_mat = None
     cart_to_frac_mat = None
+    pc = False
+    idk = False
+    lats_array = None
+
+    def empty_vars(self):
+        self.origin_path = None
+        self.origin_directory = None
+        self.origin_fname = None
+        self.raw_data = []
+        self.nameline = None
+        self.lat_scale = None
+        self.lattice = []
+        self.atom_names = None
+        self.atom_counts = None
+        self.sim_type = None
+        self.posns = []
+        self.directory = None
+        self.sig_figs = None
+        self.def_scal_orig = [0.5, 0.5, 0.5]
+        self.has_freeze_bools = False
+        self.has_atom_ids = True
+        self.frac_to_cart_mat = None
+        self.cart_to_frac_mat = None
+        self.pc = False
+        self.idk = False
+        self.lats_array = None
 
 
-    def __init__(self, file_path):
+
+    def __init__(self, file_path, pc = False):
+        self.empty_vars()
+        self.pc = pc
         self.origin_path = file_path
         self.raw_data = []
         for line in open(file_path):
@@ -57,6 +86,13 @@ class Poscar():
                 new_raw_data.append(self.raw_data[i])
         self.raw_data = new_raw_data
 
+    def nspace_split(self, list_obj):
+        clean = []
+        for item in list_obj:
+            if len(item) > 0:
+                clean.append(item)
+        return clean
+
     def organize_data(self):
         """
         Parses through the raw_data (a list of strings, where each string is
@@ -83,18 +119,22 @@ class Poscar():
                 self.lat_scale = line
                 continue
             if len(self.lattice) < 3:
-                self.lattice.append(line.rstrip().split(' '))
+                self.lattice.append(self.nspace_split(line.rstrip().split(' ')))
                 continue
             if self.atom_names is None:
-                self.atom_names = line.rstrip().split(' ')
+                self.atom_names = self.nspace_split(line.rstrip().split(' '))
                 continue
             if self.atom_counts is None:
-                self.atom_counts = line.rstrip().split(' ')
+                self.atom_counts = self.nspace_split(line.rstrip().split(' '))
                 continue
             if self.sim_type is None:
                 self.sim_type = line
                 continue
-            self.posns.append(line.rstrip().split(' '))
+            test_line = self.nspace_split(line.rstrip().split(' '))
+            if type(test_line) is list and len(test_line) == 1:
+                self.idk = test_line[0]
+                continue
+            self.posns.append(self.nspace_split(line.rstrip().split(' ')))
         if len(self.posns[0]) == 3 or len(self.posns[0]) == 6:
             self.has_atom_ids = False
         if len(self.posns[0]) > 4:
@@ -121,9 +161,23 @@ class Poscar():
                         new_p.append(x)
                 new_p.append(self.atom_names[i])
                 new_posns.append(new_p)
-            up_to += self.atom_counts[i]
+            up_to += int(self.atom_counts[i])
         self.posns = new_posns
         self.has_atom_ids = True
+
+    def organize_origin_strings_pc(self):
+        slashes = [0]
+        for c in range(self.origin_path.count('\\')):
+            slashes.append(self.origin_path[slashes[-1] + 1:].index('\\') + slashes[-1] + 1)
+        self.origin_fname = self.origin_path[slashes[-1] + 1:]
+        self.origin_directory = self.origin_path[:slashes[-1] + 1]
+
+    def organize_origin_strings_mac(self):
+        slashes = [0]
+        for c in range(self.origin_path.count('/')):
+            slashes.append(self.origin_path[slashes[-1] + 1:].index('/') + slashes[-1] + 1)
+        self.origin_fname = self.origin_path[slashes[-1] + 1:]
+        self.origin_directory = self.origin_path[:slashes[-1] + 1]
 
     def organize_origin_strings(self):
         """
@@ -131,11 +185,11 @@ class Poscar():
         the final present '/', and sets everything before that as the file
         directory and everything after that as the file name
         """
-        slashes = [0]
-        for c in range(self.origin_path.count('/')):
-            slashes.append(self.origin_path[slashes[-1] + 1:].index('/') + slashes[-1] + 1)
-        self.origin_fname = self.origin_path[slashes[-1] + 1:]
-        self.origin_directory = self.origin_path[:slashes[-1] + 1]
+        if self.pc:
+            self.organize_origin_strings_pc()
+        else:
+            self.organize_origin_strings_mac()
+
 
     def get_sig_figs(self):
         """
@@ -415,3 +469,112 @@ class Poscar():
                 for j in range(3):
                     if ref_bools[j]:
                         self.posns[i][3 + j] = 'T'
+
+    def get_posns_as_floats(self):
+        new_posns = []
+        for p in self.posns:
+            tmp_posns = p[0:3]
+            flt_posns = []
+            for t in tmp_posns:
+                flt_posns.append(float(t))
+            new_posns.append(flt_posns)
+        return new_posns
+
+    def get_lat_vecs_cart(self):
+        lat_vecs = [[0,0,0],[0,0,0],[0,0,0]]
+        for i in range(3):
+            for j in range(3):
+                lat_vecs[j][i] = float(self.lattice[i][j])*float(self.lat_scale)
+        return lat_vecs
+
+    def get_posns_cart(self):
+        posns = self.get_posns_as_floats()
+        lats = self.get_lat_vecs_cart()
+        posns_cart = []
+        for p in posns:
+            sum_hold = np.zeros(3)
+            for i in range(3):
+                sum_hold += p[i]*np.array(lats[i])
+            posns_cart.append(sum_hold)
+        return posns_cart
+
+    def get_approx_atom_center_idx(self, grid_dims, atom_idx, atom_type = None):
+        posn = self.posns[atom_idx]
+        if not atom_type is None:
+            assert posn[-1] == atom_type
+        center_idx = []
+        for i in range(3):
+            center_idx.append(int(posn[i]*grid_dims[i]))
+        return center_idx
+
+
+
+    # def get_grid_centers_cart(self, grid_dims):
+    #     lats = self.get_lat_vecs_cart()
+    #     lats_array = [np.array(lats[0]), np.array(lats[1]), np.array(lats[2])]
+    #     centers = []
+    #     for i in range(grid_dims[0]):
+    #         centers.append([])
+    #         for j in range(grid_dims[1]):
+    #             centers[-1].append([])
+    #             for k in range(grid_dims[2]):
+    #                 center = ((i + 0.5)/grid_dims[0])*lats_array[0] + ((j + 0.5)/grid_dims[1])*lats_array[1] + ((k + 0.5)/grid_dims[2])*lats_array[2]
+    #                 centers[-1][-1].append(center)
+    #     return centers
+    #
+    # def get_nearest_atom(self, posn, cart_posns):
+    #     posn = np.array(posn)
+    #     cur_best = 100
+    #     cur_idx = 0
+    #     for i in range(len(cart_posns)):
+    #         dist = np.linalg.norm(posn - cart_posns[i])
+    #         if dist < cur_best:
+    #             cur_best = dist
+    #             cur_idx = i
+    #     return cur_idx, cur_best
+    #
+    # def get_grid_nearest_atoms(self, grid_dims, cutoff = 1.0):
+    #     """ For grid dims (i, j, k), returns an i by j by k list of list of lists, where element i,j,k contains
+    #     None or the atom index of its nearest neighbor
+    #     :param grid_dims:
+    #     :param cutoff:
+    #     :return:
+    #     """
+    #     grid_centers = self.get_grid_centers_cart(grid_dims)
+    #     cart_posns = self.get_posns_cart()
+    #     claimed_dict = {}
+    #     grid_idcs = []
+    #     for i in range(grid_dims[0]):
+    #         grid_idcs.append([])
+    #         for j in range(grid_dims[1]):
+    #             grid_idcs[-1].append([])
+    #             for k in range(grid_dims[2]):
+    #                 idx, dist = self.get_nearest_atom(
+    #                     grid_centers[i][j][k],
+    #                     cart_posns
+    #                 )
+    #                 if dist < cutoff:
+    #                     append_value = idx
+    #                 else:
+    #                     append_value = None
+    #                 grid_idcs[-1][-1].append(append_value)
+    #     return grid_idcs
+    #
+    # def get_atoms_encompassed_grid_pts(self, grid_dims, cutoff=1.0):
+    #     """ Returns a dictionary where key values are the atom index, and dict holds the i/j/k indices of grid points
+    #     encompassed by atom
+    #     :param grid_dims:
+    #     :param cutoff:
+    #     :return:
+    #     """
+    #     encompass_dict = {}
+    #     for i in range(len(self.posns)):
+    #         encompass_dict[i] = []
+    #     grid_idcs = self.get_grid_nearest_atoms(grid_dims, cutoff=cutoff)
+    #     for i in range(len(grid_idcs[0])):
+    #         for j in range(len(grid_idcs[1])):
+    #             for k in range(len(grid_idcs[2])):
+    #                 if grid_idcs[i][j][k] is not None:
+    #                     encompass_dict[grid_idcs[i][j][k]].append(tuple([i,j,k]))
+    #     return encompass_dict
+
