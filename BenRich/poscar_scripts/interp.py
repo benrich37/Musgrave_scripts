@@ -1,5 +1,6 @@
 import numpy as np
 import operator
+import basis_set_exchange as bse
 ops = {
     '>': operator.gt,
     '<': operator.lt
@@ -224,6 +225,66 @@ class Poscar():
         new.write(self.get_dump_str())
         new.close()
 
+    def get_xyz_dump_str(self):
+        dump_str = ''
+        posns_cart = self.get_posns_cart()
+        for i in range(len(self.atom_names)):
+            for j in range(int(self.atom_counts[i])):
+                dump_str += self.atom_names[i] + '   '
+                posns = posns_cart[i + j]
+                for p in posns[:3]:
+                    dump_str += self.float_to_str(p) + ' '
+                dump_str += ' \n '
+        return dump_str
+
+    def get_xyz_dump_str_alt(self):
+        self.append_atom_ids_to_posns()
+        dump_str = ''
+        posns_cart = self.get_posns_cart()
+        for i, p in enumerate(posns_cart):
+            dump_str += str(self.posns[i][-1]) + ' '
+            for posn in p[:3]:
+                dump_str += self.float_to_str(posn) + ' '
+            dump_str += '\n'
+        # for i in range(len(self.atom_names)):
+        #     for j in range(int(self.atom_counts[i])):
+        #         dump_str += self.atom_names[i] + '   '
+        #         posns = posns_cart[i + j]
+        #         for p in posns:
+        #             dump_str += self.float_to_str(p) + ' '
+        #         dump_str += ' \n '
+        return dump_str
+
+    def get_xyz_dump_str_gaussian(self, jobtype='', basis=None, functional='', fname=None, tags=[]):
+        assert type(tags) == list
+        dump_str2 = ''
+        if fname is not None:
+            dump_str2 += '%chk=' + fname + '.chk \n'
+        dump_str2 += '# ' + jobtype + ' ' + functional + ' ' + 'Gen '
+        for t in tags:
+            dump_str2 += t + ' '
+        dump_str2 += '\n'
+        dump_str2 += '\n '
+        dump_str2 += 'Title Card Required \n '
+        dump_str2 += '\n '
+        dump_str2 += '0 1 \n'
+        dump_str2 += self.get_xyz_dump_str_alt()
+        if basis is not None:
+            dump_str2 += '\n'
+            dump_str2 += bse.get_basis(basis, elements=self.atom_names, fmt='gaussian94')
+        return dump_str2
+
+    def dump_as_xyz(self, fname):
+        new = open(self.origin_directory + fname, 'w')
+        new.write(self.get_xyz_dump_str())
+        new.close()
+
+    def dump_as_gaussian(self, fname, jobtype='', basis=None, functional='', suffix='gjf', tags=[]):
+        assert type(tags) == list
+        new = open(self.origin_directory + fname + '.' + suffix, 'w')
+        new.write(self.get_xyz_dump_str_gaussian(jobtype=jobtype, basis=basis, functional=functional, fname=fname, tags=tags))
+        new.close()
+
     def float_to_str(self, num):
         sig1 = len(str(int(num)))
         sig2 = self.sig_figs - sig1
@@ -337,6 +398,31 @@ class Poscar():
                         new_posns.append(new_p)
         self.posns = new_posns
         self.organize_posns_and_headers()
+
+    # def partial_supercell(self, expand_factors):
+    #     """
+    #     :param (list[int]) expand_factors: How many images to creates along [a, b, c]
+    #     """
+    #     self.rescale_unit_cell(expand_factors,
+    #                            freeze=True,
+    #                            scale_origin=[0., 0., 0.])
+    #     x_dup = int(np.ceil(expand_factors[0]))
+    #     y_dup = int(np.ceil(expand_factors[1]))
+    #     z_dup = int(np.ceil(expand_factors[2]))
+    #     new_posns = []
+    #     for x in range(x_dup):
+    #         for y in range(y_dup):
+    #             for z in range(z_dup):
+    #                 for p in self.posns:
+    #                     new_p = self.translate_posn(x, x_dup,
+    #                                                 y, y_dup,
+    #                                                 z, z_dup,
+    #                                                 p)
+    #                     self.app_posn_xtra_data(new_p, p)
+    #                     new_posns.append(new_p)
+    #     self.posns = new_posns
+    #     self.organize_posns_and_headers()
+    #     self.cutoff(1.0, 1.0, 1.0)
 
     def cutoff_check(self, posn, x, y, z, op_x, op_y, op_z):
         bad_x = op_x(float(posn[0]), x)
@@ -504,10 +590,10 @@ class Poscar():
             assert posn[-1] == atom_type
         center_idx = []
         for i in range(3):
-            center_idx.append(int(posn[i]*grid_dims[i]))
+            center_idx.append(int(float(posn[i])*float(grid_dims[i])))
         return center_idx
 
-    def get_nearest_dist_in_idcs(self, grid_dims, atom_idx, atom_type = None):
+    def get_dists_in_idcs(self, grid_dims, atom_idx, atom_type = None):
         center_idx = self.get_approx_atom_center_idx(grid_dims, atom_idx, atom_type=atom_type)
         center_idcs = []
         for i in range(len(self.posns)):
@@ -516,6 +602,12 @@ class Poscar():
         for idx in center_idcs:
             dists.append(np.linalg.norm(np.array(center_idx) - np.array(idx)))
         return dists
+
+    def get_conservative_atom_radius(self, grid_dims, atom_idx, atom_type = None):
+        dists = self.get_dists_in_idcs(grid_dims, atom_idx, atom_type=atom_type)
+        dists.sort()
+        return int(dists[1])
+
 
 
 
