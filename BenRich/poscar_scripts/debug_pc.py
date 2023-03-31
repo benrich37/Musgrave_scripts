@@ -4,7 +4,7 @@ import os
 
 
 # path = 'C:\\Users\\User\\Desktop\\backup[s\\1-19-2023\\img_intrx\\calcs\\surfs'
-path = 'C:\\Users\\User\\Desktop\\backup[s\\1-19-2023\\mnc-pt-pyrid\\1n\\'
+path = 'C:\\Users\\User\\Desktop\\backup[s\\1-19-2023\\mnc-pt-pyrid_archive\\1n\\'
 os.chdir(path)
 
 cu_z12 = Poscar('Cu_Ap2-5_Bp2-5_Cp1-5_Z12\\No_bias\\POSCAR', pc=True)

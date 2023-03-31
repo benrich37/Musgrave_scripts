@@ -87,3 +87,13 @@ def parse_eigfile(eigfile, nStates):
     E = np.fromfile(eigfile)
     return E.reshape(nStates,-1)
 
+def parse_dos(filename):
+    header = None
+    data = []
+    for line in open(filename):
+        if header is None:
+            header = line.rstrip('\n').split('\t')
+        else:
+            data.append(line.rstrip('\n').split('\t'))
+    return header, np.array(data, dtype=float).T
+
