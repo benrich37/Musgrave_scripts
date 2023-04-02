@@ -77,7 +77,6 @@ def prepare_large_funcs(e_jk,P_uvjk,nBands,nStates,wk,k_points,guts=False,docupr
             - :param dE:
             - :return:
                 - pCOHP_uv_vals: Evaluated pCOHP_uv values for each E on Egrid (y-values) (np.ndarray(float))
-                - Egrid: Energies used to evaluated pCOHP_uv (x-values) (np.ndarray(float))
         - pCOHP_uv_u:
             - :param uorb: index for orbital u (int)
             - :param vorb: index for orbital v (int)
@@ -113,12 +112,12 @@ def prepare_large_funcs(e_jk,P_uvjk,nBands,nStates,wk,k_points,guts=False,docupr
                                  False for list(np.ndarray(float))
     """
     H_uvk = lambda uorb, vorb, kstate: _H_uvk(uorb,vorb,kstate,e_jk,P_uvjk,nBands)
-    pCOHP_uvk = lambda uorb, vorb, kstate, Emin, Emax, dE: _pCOHP_uvk(uorb,vorb,kstate,Emin,Emax,dE,nBands,H_uvk,e_jk,P_uvjk)
-    pCOHP_uv = lambda uorb, vorb, Emin, Emax, dE: _pCOHP_uv(uorb,vorb,Emin,Emax,dE,nStates,wk,pCOHP_uvk)
+    pCOHP_uvk = lambda uorb, vorb, kstate, Egrid, Emin, Emax, dE: _pCOHP_uvk(uorb,vorb,kstate,Egrid,Emin,Emax,dE,nBands,H_uvk,e_jk,P_uvjk)
+    pCOHP_uv = lambda uorb, vorb, Egrid, Emin, Emax, dE: _pCOHP_uv(uorb, vorb, Egrid, Emin, Emax, dE, nStates, wk, pCOHP_uvk)
     if docuprint:
         print(docustrings_printable['pCOHP_uv'])
-    pCOHP_uvk_u = lambda uorb, vorb, kstate, Emin, Emax, dE: _pCOHP_uvk_u(uorb,vorb,kstate,Emin,Emax,dE,nBands,H_uvk,e_jk,P_uvjk)
-    pCOHP_uv_u = lambda uorb, vorb, Emin, Emax, dE: _pCOHP_uv_u(uorb,vorb,Emin,Emax,dE,nStates,wk,pCOHP_uvk_u)
+    pCOHP_uvk_u = lambda uorb, vorb, kstate, Egrid, Emin, Emax, dE: _pCOHP_uvk_u(uorb,vorb,kstate,Egrid,Emin,Emax,dE,nBands,H_uvk,e_jk,P_uvjk)
+    pCOHP_uv_u = lambda uorb, vorb, Egrid, Emin, Emax, dE: _pCOHP_uv_u(uorb,vorb,Egrid,Emin,Emax,dE,nStates,wk,pCOHP_uvk_u)
     Hk_atomic_matrix = lambda orb_idcs, kstate, array_bool: _Hk_atomic_matrix(orb_idcs, kstate, H_uvk, array_bool)
     H_atomic_matrices = lambda orb_idcs, k_points, array_bool: _H_atomic_matrices(orb_idcs, k_points, array_bool, Hk_atomic_matrix)
     H_atomic_matrix = lambda orb_idcs: _H_atomic_matrix(orb_idcs, H_atomic_matrices, k_points, wk)
@@ -127,6 +126,11 @@ def prepare_large_funcs(e_jk,P_uvjk,nBands,nStates,wk,k_points,guts=False,docupr
     else:
         return pCOHP_uv, pCOHP_uv_u, H_atomic_matrix
 
+def adjust_Emax(Emin, Emax, dE):
+    delta = Emax - Emin
+    counts = np.ceil(delta / dE)
+    Emax_new = Emin + (counts*dE)
+    return Emax_new
 
 def orbs_idx_dict(outfile, nOrbsPerAtom):
     ionPos, ionNames, R = jfunc.get_coords_vars(outfile)
@@ -154,9 +158,8 @@ def _H_uvk(uorb, vorb, kstate, e_jk, P_uvjk, nBands):
     return sum_hold
 
 
-def _pCOHP_uvk(uorb, vorb, kstate, Emin, Emax, dE, nBands, H_uvk, e_jk, P_uvjk):
+def _pCOHP_uvk(uorb, vorb, kstate, Egrid, Emin, Emax, dE, nBands, H_uvk, e_jk, P_uvjk):
     Huvk = H_uvk(uorb, vorb, kstate)
-    Egrid = np.arange(Emin, Emax + dE, dE)
     output = np.zeros(np.shape(Egrid))
     for j in range(nBands):
         ejk = e_jk(j, kstate)
@@ -167,20 +170,18 @@ def _pCOHP_uvk(uorb, vorb, kstate, Emin, Emax, dE, nBands, H_uvk, e_jk, P_uvjk):
             x = P_uvjk(uorb, vorb, j, kstate) * Huvk
             output[e_idx] += np.real(x) * e_weight
             output[e_idx + 1] += np.real(x) * e_spill
-    return output, Egrid
+    return output
 
 
-def _pCOHP_uv(uorb, vorb, Emin, Emax, dE, nStates, wk, pCOHP_uvk):
-    Egrid = np.arange(Emin, Emax + dE, dE)
+def _pCOHP_uv(uorb, vorb, Egrid, Emin, Emax, dE, nStates, wk, pCOHP_uvk):
     pCOHP_uv_vals = np.zeros(np.shape(Egrid))
     for k in range(nStates):
-        pCOHP_uv_vals += pCOHP_uvk(uorb, vorb, k, Emin, Emax, dE)[0] * wk[k]
-    return pCOHP_uv_vals, Egrid
+        pCOHP_uv_vals += pCOHP_uvk(uorb, vorb, k, Egrid, Emin, Emax, dE) * wk[k]
+    return pCOHP_uv_vals
 
 
-def _pCOHP_uvk_u(uorb, vorb, kstate, Emin, Emax, dE, nBands, H_uvk, e_jk, P_uvjk):
+def _pCOHP_uvk_u(uorb, vorb, kstate, Egrid, Emin, Emax, dE, nBands, H_uvk, e_jk, P_uvjk):
     Huvk = H_uvk(uorb, vorb, kstate)
-    Egrid = np.arange(Emin, Emax + dE, dE)
     output = np.zeros(np.shape(Egrid))
     for j in range(nBands):
         ejk = e_jk(j, kstate)
@@ -191,15 +192,14 @@ def _pCOHP_uvk_u(uorb, vorb, kstate, Emin, Emax, dE, nBands, H_uvk, e_jk, P_uvjk
             x = P_uvjk(uorb, uorb, j, kstate) * Huvk
             output[e_idx] += np.real(x) * e_weight
             output[e_idx + 1] += np.real(x) * e_spill
-    return output, Egrid
+    return output
 
 
-def _pCOHP_uv_u(uorb, vorb, Emin, Emax, dE, nStates, wk, pCOHP_uvk_u):
-    Egrid = np.arange(Emin, Emax + dE, dE)
+def _pCOHP_uv_u(uorb, vorb, Egrid, Emin, Emax, dE, nStates, wk, pCOHP_uvk_u):
     output = np.zeros(np.shape(Egrid))
     for k in range(nStates):
-        output += pCOHP_uvk_u(uorb, vorb, k, Emin, Emax, dE)[0] * wk[k]
-    return output, Egrid
+        output += pCOHP_uvk_u(uorb, vorb, k, Egrid, Emin, Emax, dE) * wk[k]
+    return output
 
 
 def _Hk_atomic_matrix(orb_idcs, kstate, H_uvk, array_bool):
@@ -234,5 +234,5 @@ def _H_atomic_matrix(orb_idcs, H_atomic_matrices, k_points, wk):
     return out
 
 docustrings_printable = {
-    'pCOHP_uv': 'pCOHP_uv(orb u index, orb v index, Emin, Emax, dE) -> pCOHP_uv(E) array, E array'
+    'pCOHP_uv': 'pCOHP_uv(orb u index, orb v index, Egrid, Emin, Emax, dE) -> pCOHP_uv(E) array'
 }
