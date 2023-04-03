@@ -169,7 +169,7 @@ def get_coords_vars(outfile):
     ionPosStarted = False
     ionNames = []
     ionPos = []
-    for i, line in enumerate(open('out')):
+    for i, line in enumerate(open(outfile)):
         if i > start:
             # Lattice vectors:
             if line.find('Initializing the Grid') >= 0 and (not Rdone):

@@ -129,8 +129,16 @@ def prepare_large_funcs(e_jk,P_uvjk,nBands,nStates,wk,k_points,guts=False,docupr
 def adjust_Emax(Emin, Emax, dE):
     delta = Emax - Emin
     counts = np.ceil(delta / dE)
-    Emax_new = Emin + (counts*dE)
+    Emax_new = Emin + ((counts+3)*dE)
+    Emin_new = Emin - 3*dE
     return Emax_new
+
+def adjust_Ebounds(Emin, Emax, dE):
+    delta = Emax - Emin
+    counts = np.ceil(delta / dE)
+    Emax_new = Emin + ((counts+3)*dE)
+    Emin_new = Emin - 3*dE
+    return Emax_new, Emin_new
 
 def orbs_idx_dict(outfile, nOrbsPerAtom):
     ionPos, ionNames, R = jfunc.get_coords_vars(outfile)
@@ -227,12 +235,13 @@ def _H_atomic_matrices(orb_idcs, k_points, array_bool, Hk_atomic_matrix):
 
 
 def _H_atomic_matrix(orb_idcs, H_atomic_matrices, k_points, wk):
-    matrices = H_atomic_matrices(orb_idcs, k_points, array=True)
+    matrices = H_atomic_matrices(orb_idcs, k_points, True)
     out = np.zeros(np.shape(matrices[0]), dtype=complex)
     for i in range(len(k_points)):
         out += matrices[i] * wk[i]
     return out
 
 docustrings_printable = {
-    'pCOHP_uv': 'pCOHP_uv(orb u index, orb v index, Egrid, Emin, Emax, dE) -> pCOHP_uv(E) array'
+    'pCOHP_uv': 'pCOHP_uv(orb u index, orb v index, Egrid, Emin, Emax, dE) -> pCOHP_uv(E) array',
+    'H_atomic_matrix': 'H_atomic_matrix(orb_idcs) -> H Matrix in orbital basis'
 }

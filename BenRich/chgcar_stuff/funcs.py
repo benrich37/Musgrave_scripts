@@ -1,15 +1,16 @@
 import numpy as np
+import numba
 
-def fmt_num_1(number):
+
+# I have to decalre argument data types u dummy
+#@numba.jit()
+def fmt_num_1(number: np.float64):
     if abs(number) < 1.0:
         num_decimals = 6
     else:
         num_decimals = 6 - int(np.floor(np.log10(abs(number))))
     format_string = f".{num_decimals}f"
     return format(number, format_string)
-
-def fmt_num_2(number):
-    return format(number, ".10E")
 
 def get_start_line(outfile):
     start = None
@@ -94,6 +95,35 @@ def count_ions(ionNames):
             ion_counts.append(ionNames.count(name))
     return ion_names, ion_counts
 
+#@numba.jit()
+def fmt_num_2(number):
+    exponent = 0
+    while abs(number) >= 10:
+        number /= 10
+        exponent += 1
+    while abs(number) < 1:
+        number *= 10
+        exponent -= 1
+
+    sign = 'E+' if exponent >= 0 else 'E'
+    int_part = int(number)
+    frac_part = int((number - int_part) * 10 ** 10)
+    formatted_number = str(int_part) + '.' + str(frac_part).zfill(10)
+    formatted_exponent = (sign if exponent >= 0 else '-') + str(abs(exponent)).zfill(2)
+    return formatted_number + formatted_exponent
+
+def write_densities(out_str: str, dtot: np.ndarray):
+    iterations = int(np.floor(len(dtot) / 5.))
+    spill = len(dtot) % 5
+    for i in range(spill):
+        list(dtot).append(0.0)
+    range5 = [0,1,2,3,4]
+    for i in range(iterations):
+        for j in range5:
+            out_str += '\t'
+            out_str += fmt_num_2(dtot[j + 5 * i])
+            # out_str += funcs.fmt_num_2(dtot[j + 5*i])
+        out_str += '\n'
 
 def chgcar_out(n_up, n_dn, out_path, chgcar_name='CHGCAR', savedir=None, pc=True, noncollin=False):
     # Get required variables
@@ -145,16 +175,7 @@ def chgcar_out(n_up, n_dn, out_path, chgcar_name='CHGCAR', savedir=None, pc=True
         out_str += '   '
         out_str += str(length)
     out_str += ' \n'
-    ticker = 0
-    for dens in dtot:
-        out_str += ' '
-        out_str += fmt_num_2(dens)
-        out_str += '\t'
-        if ticker >= 4:
-            out_str += ' \n'
-            ticker = 0
-        else:
-            ticker += 1
+    write_densities(out_str, dtot)
     out_str += ' \n'
     # Write chgcar
     savepath = ''
