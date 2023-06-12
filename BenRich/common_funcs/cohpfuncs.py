@@ -1,8 +1,10 @@
 import numpy as np
 import jdftxfuncs as jfunc
+from numba import jit
 
 def parse_data(bandfile, gvecfile, eigfile, guts=False):
     # TODO: Return array of strings to indicate which orbital is in which orbital index
+    # ^ yeah fat chance nerd
     """
     :param bandfile: Path to BandProjections file (str)
     :param gvecfile: Path to Gvectors file (str)
@@ -24,14 +26,16 @@ def parse_data(bandfile, gvecfile, eigfile, guts=False):
     :rtype: tuple
     """
     proj, nStates, nBands, nProj, nSpecies, nOrbsPerAtom = jfunc.parse_bandfile(bandfile)
-    wk, iGarr, k_points, nStates = jfunc.parse_gvecfile(gvecfile)
-    E = jfunc.parse_eigfile(eigfile, nStates)
     if guts:
+        wk, iGarr, k_points, nStates = jfunc.parse_gvecfile(gvecfile)
+        E = jfunc.parse_eigfile(eigfile, nStates)
         return proj, nStates, nBands, nProj, nOrbsPerAtom, wk, k_points, E, iGarr
     else:
+        wk, k_points, nStates = jfunc.parse_gvecfile_noigarr(gvecfile)
+        E = jfunc.parse_eigfile(eigfile, nStates)
         return proj, nStates, nBands, nProj, nOrbsPerAtom, wk, k_points, E
 
-def prepare_small_funcs(proj, E):
+def prepare_small_funcs(proj, E, numba=False):
     """
     :param proj: a rank 3 numpy array containing the complex band projection,
                  data (<φ_μ|ψ_j> = T_μj) with dimensions (nStates, nBands, nProj)
@@ -54,9 +58,25 @@ def prepare_small_funcs(proj, E):
             - :return: Eigenvalue for KS function |psi_j(k)>
     :rtype: tuple
     """
-    T_juk = lambda uorb, jband, kstate: proj[kstate][jband][uorb]
-    P_uvjk = lambda uorb, vorb, jband, kstate: np.conjugate(T_juk(uorb, jband, kstate))*T_juk(vorb, jband, kstate)
-    e_jk = lambda jband, kstate: E[kstate][jband]
+    if numba:
+        @jit(nopython=True)
+        def T_juk(uorb, jband, kstate):
+            return proj[kstate][jband][uorb]
+
+        @jit(nopython=True)
+        def P_uvjk(uorb, vorb, jband, kstate):
+            t1 = T_juk(uorb, jband, kstate)
+            t2 = T_juk(vorb, jband, kstate)
+            t1_conj = t1.real - t1.imag * 1j
+            return t1_conj * t2
+
+        @jit(nopython=True)
+        def e_jk(jband, kstate):
+            return E[kstate][jband]
+    else:
+        T_juk = lambda uorb, jband, kstate: proj[kstate][jband][uorb]
+        P_uvjk = lambda uorb, vorb, jband, kstate: np.conjugate(T_juk(uorb, jband, kstate))*T_juk(vorb, jband, kstate)
+        e_jk = lambda jband, kstate: E[kstate][jband]
     return T_juk, P_uvjk, e_jk
 
 def prepare_large_funcs(e_jk,P_uvjk,nBands,nStates,wk,k_points,guts=False,docuprint=False):

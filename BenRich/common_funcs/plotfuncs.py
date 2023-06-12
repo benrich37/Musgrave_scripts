@@ -31,6 +31,14 @@ def get_integrated_array(ygrid, dx):
             integrated_array.append(cur)
     return np.array(integrated_array)
 
+def get_integrated_trapezoidal(ygrid, xgrid):
+    integrated_array = []
+    cur = 0
+    for i in range(len(ygrid) - 2):
+        dx = (xgrid[i + 2] - xgrid[i])/2.
+        integrated_array.append(cur + (ygrid))
+
+
 def ez_pCOHP_sum(uorb_list, vorb_list, Egrid, Emin, Emax, dE, pCOHP_func):
     pCOHP_sum = np.zeros(np.shape(Egrid))
     for u in uorb_list:
