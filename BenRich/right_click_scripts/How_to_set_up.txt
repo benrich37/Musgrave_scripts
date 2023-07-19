@@ -1,0 +1,15 @@
+1. Make sure you have access to gaussview (otherwise 3/4 of these are useless)
+2. Make sure you have a python executable with ASE installed
+3. Put all these files in whatever directory
+4. Locate that exe and use it to replace the "C:\Users\User\anaconda3\\envs\Musgrave_scripts\python.exe" in the .bat files
+5. Replace the references to the python scripts (ie "C:\Users\User\...\center_z_com.py") so that they refer to the correct directory (where you put the right_click_scripts files)
+7. Press `Win + R` to open the Run dialog box
+8. Type `regedit` into the dialog box and press enter
+9. Navigate to `HKEY_CLASSES_ROOT\*\shell`
+10. For each .bat file, perform the following:
+    10.a. Right click `shell`, click `New -> Key`
+    10.b. Name the key after the .bat file (this is just the name that will show up on the right click menu)
+    10.c. Right click on the key you just created and click `New -> key`, and name this new key `command`
+    10.d. Double click the `(Default)` key within your new `command`, and in the `Value data` dialog box, paste the path
+          to the .bat file inside quotation marks, a space, and then `"%1"` (also in quotation marks) and then hit `Ok`
+          ie:  "C:\Users\User\PycharmProjects\Musgrave_scripts\BenRich\right_click_scripts\center_z_com.bat" "%1"

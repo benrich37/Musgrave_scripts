@@ -28,6 +28,7 @@ class Poscar():
     pc = False
     idk = False
     lats_array = None
+    b_per_a = 1.8897259886
 
     def empty_vars(self):
         self.origin_path = None
@@ -51,6 +52,8 @@ class Poscar():
         self.pc = False
         self.idk = False
         self.lats_array = None
+        self.selective_dynamics = False
+        self.cartesian = False
 
 
 
@@ -58,7 +61,6 @@ class Poscar():
         self.empty_vars()
         self.pc = pc
         self.origin_path = file_path
-        self.raw_data = []
         for line in open(file_path):
             self.raw_data.append(line.removesuffix('\n'))
         self.organize_data()
@@ -128,8 +130,14 @@ class Poscar():
             if self.atom_counts is None:
                 self.atom_counts = self.nspace_split(line.rstrip().split(' '))
                 continue
-            if self.sim_type is None:
-                self.sim_type = line
+            if "Selective dynamics" in line:
+                self.selective_dynamics = True
+                continue
+            if "Direct" in line:
+                self.cartesian = False
+                continue
+            elif "Cartesian" in line:
+                self.cartesian = True
                 continue
             test_line = self.nspace_split(line.rstrip().split(' '))
             if type(test_line) is list and len(test_line) == 1:
@@ -191,7 +199,6 @@ class Poscar():
         else:
             self.organize_origin_strings_mac()
 
-
     def get_sig_figs(self):
         """
         Gets the sig figs expected in the POSCAR file
@@ -213,7 +220,12 @@ class Poscar():
         for n in self.atom_counts:
             dump_str += n + ' '
         dump_str += ' \n'
-        dump_str += self.sim_type + ' \n'
+        if not self.sim_type is None:
+            dump_str += self.sim_type + ' \n'
+        if self.cartesian:
+            dump_str += "Cartesian \n"
+        else:
+            dump_str += "Direct \n"
         for p in self.posns:
             for x in p:
                 dump_str += x + ' '
@@ -556,7 +568,8 @@ class Poscar():
                     if ref_bools[j]:
                         self.posns[i][3 + j] = 'T'
 
-    def get_posns_as_floats(self):
+    def get_posns_frac(self):
+        assert self.cartesian is False
         new_posns = []
         for p in self.posns:
             tmp_posns = p[0:3]
@@ -574,15 +587,18 @@ class Poscar():
         return lat_vecs
 
     def get_posns_cart(self):
-        posns = self.get_posns_as_floats()
-        lats = self.get_lat_vecs_cart()
-        posns_cart = []
-        for p in posns:
-            sum_hold = np.zeros(3)
-            for i in range(3):
-                sum_hold += p[i]*np.array(lats[i])
-            posns_cart.append(sum_hold)
-        return posns_cart
+        if self.cartesian:
+            return self.posns
+        else:
+            posns = self.get_posns_frac()
+            lats = self.get_lat_vecs_cart()
+            posns_cart = []
+            for p in posns:
+                sum_hold = np.zeros(3)
+                for i in range(3):
+                    sum_hold += p[i]*np.array(lats[i])
+                posns_cart.append(sum_hold)
+            return posns_cart
 
     def get_approx_atom_center_idx(self, grid_dims, atom_idx, atom_type = None):
         posn = self.posns[atom_idx]
@@ -608,6 +624,48 @@ class Poscar():
         dists.sort()
         return int(dists[1])
 
+
+    def _jdftx_ionpos_dumpstr(self, posns, cart):
+        if cart:
+            dump_str = "coords-type Cartesian \n"
+        else:
+            dump_str = "coords-type Lattice \n"
+        for i in range(len(posns)):
+            dump_str += "ion " + self.posns[i][-1] + " "
+            for j in range(3):
+                dump_str += self.float_to_str(posns[i][j]*self.b_per_a) + " \t"
+            dump_str += " 1 \n"
+        return dump_str
+
+    def dump_jdftx_ionpos(self, fname = None, cart = True):
+        if fname is None:
+            fname = "params.ionpos"
+        if cart:
+            posns = self.get_posns_cart()
+        else:
+            posns = self.get_posns_frac()
+        dump_str = self._jdftx_ionpos_dumpstr(posns, cart)
+        with open(self.origin_directory + fname, 'w') as f:
+            f.write(dump_str)
+
+    def _jdftx_lattice_dumpstr(self, lat):
+        dump_str = "lattice \\ \n"
+        for i in range(2):
+            for j in range(3):
+                dump_str += "\t" + self.float_to_str(lat[i][j]*self.b_per_a)
+            dump_str += " \\ \n"
+        for j in range(3):
+            dump_str +="\t" + self.float_to_str(lat[2][j]*self.b_per_a)
+        dump_str += " \n"
+        return dump_str
+
+    def dump_jdftx_lattice(self, fname = None):
+        if fname is None:
+            fname = "params.lattice"
+        lat = self.get_lat_vecs_cart()
+        dump_str = self._jdftx_lattice_dumpstr(lat)
+        with open(self.origin_directory + fname, 'w') as f:
+            f.write(dump_str)
 
 
 

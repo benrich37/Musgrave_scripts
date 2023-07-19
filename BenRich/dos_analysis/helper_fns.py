@@ -55,19 +55,19 @@ def plot_all_dos(data, y_idx, bounds = [0, -1]):
                             dtype=float)
                    )
 
-def plot_all_dos_many(data, y_idcs, header, bounds = [0, -1], xlims = None):
-    runs = len(data)
-    plots = len(y_idcs)
-    fig, ax = plt.subplots(runs, 1, sharex='col')
-    for i in range(runs):
-        for j in range(plots):
-            ax[i].plot(np.array(data[i][0][bounds[0]:bounds[-1]], dtype=float),
-                       np.array(data[i][y_idcs[j]][bounds[0]:bounds[-1]], dtype=float),
-                       label = header[y_idcs[j]])
-            ax[i].legend()
-    if xlims is not None:
-        ax[0].set_xlim(xlims[0], xlims[1])
-    fig.savefig('C:\\Users\\User\\PycharmProjects\\ASE_Env\\figs\\test_605pm.png')
+# def plot_all_dos_many(data, y_idcs, header, bounds = [0, -1], xlims = None):
+#     runs = len(data)
+#     plots = len(y_idcs)
+#     fig, ax = plt.subplots(runs, 1, sharex='col')
+#     for i in range(runs):
+#         for j in range(plots):
+#             ax[i].plot(np.array(data[i][0][bounds[0]:bounds[-1]], dtype=float),
+#                        np.array(data[i][y_idcs[j]][bounds[0]:bounds[-1]], dtype=float),
+#                        label = header[y_idcs[j]])
+#             ax[i].legend()
+#     if xlims is not None:
+#         ax[0].set_xlim(xlims[0], xlims[1])
+#     fig.savefig('C:\\Users\\User\\PycharmProjects\\ASE_Env\\figs\\test_605pm.png')
 
 
 def check_orbital_and_atom(label, orbs, atom_ids):

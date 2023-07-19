@@ -1,0 +1,4 @@
+from interp import Poscar
+import os
+os.chdir('/Users/richb/Desktop')
+salt = Poscar('CONTCAR')
