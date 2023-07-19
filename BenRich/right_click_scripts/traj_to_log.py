@@ -1,4 +1,4 @@
-"Takes an ASE optimization traj file, and turns it into a fake gaussian .log output file"
+"Takes an ASE optimization traj file, and turns it into a fake gaussian .logx output file"
 "WARNING: WILL NOT WORK WITH NEB TRAJS"
 import sys
 file = sys.argv[1]
@@ -46,6 +46,6 @@ def log_input_orientation(atoms):
     return dump_str
 
 traj = TrajectoryReader(file)
-with open(file[:file.index(".traj")] + "_traj.log", "w") as f:
+with open(file[:file.index(".traj")] + "_traj.logx", "w") as f:
     f.write(traj_to_log_str(traj))
     f.close()
