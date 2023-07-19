@@ -1,5 +1,5 @@
 "Takes an ASE optimization traj file, and turns it into a fake gaussian .logx output file"
-"Note: The energies within the .logx file may not be the true SCF energies found, but the force-consistent energies used in the geometry optimization"
+"Fixed scf_str to give total energy in Hartrees instead of eV for internal consistency"
 "WARNING: WILL NOT WORK WITH NEB TRAJS"
 import sys
 file = sys.argv[1]
@@ -18,8 +18,8 @@ def traj_to_log_str(traj):
     dump_str += " Normal termination of Gaussian 16"
     return dump_str
 
-def scf_str(atoms):
-    return f"\n SCF Done:  E =  {atoms.get_potential_energy()}\n\n"
+def scf_str(atoms, e_conv=(1/27.211397)):
+    return f"\n SCF Done:  E =  {atoms.get_potential_energy()*e_conv}\n\n"
 
 def opt_spacer(i, nSteps):
     dump_str = "\n GradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGrad\n"
