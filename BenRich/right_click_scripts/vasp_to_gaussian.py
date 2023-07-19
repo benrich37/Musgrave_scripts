@@ -1,3 +1,4 @@
+"Takes a vasp-style file, and writes a .gjf file for gaussview to read"
 import sys
 file = sys.argv[1]
 from ase.io import read, write

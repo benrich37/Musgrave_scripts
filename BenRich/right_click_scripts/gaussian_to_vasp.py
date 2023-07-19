@@ -1,3 +1,4 @@
+"Takes a gaussian .gjf file, and saves a vasp-style file"
 import sys
 file = sys.argv[1]
 from ase.io import read, write

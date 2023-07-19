@@ -1,3 +1,5 @@
+"Takes an ASE optimization traj file, and turns it into a fake gaussian .log output file"
+"WARNING: WILL NOT WORK WITH NEB TRAJS"
 import sys
 file = sys.argv[1]
 from ase.io.trajectory import TrajectoryReader

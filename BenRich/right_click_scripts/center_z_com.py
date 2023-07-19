@@ -1,3 +1,5 @@
+"Creates a new vasp-style file where the center of mass is aligned with the center of the cell along the Z-axis"
+"Also creates a duplicate _backup of the original just in case"
 import sys
 file = sys.argv[1]
 from ase.io import read, write
