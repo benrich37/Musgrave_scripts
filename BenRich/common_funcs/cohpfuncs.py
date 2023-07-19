@@ -2,7 +2,7 @@ import numpy as np
 import jdftxfuncs as jfunc
 from numba import jit
 
-def parse_data(bandfile, gvecfile, eigfile, guts=False):
+def parse_data(bandfile, gvecfile, eigfile, guts=False, complex_band=True):
     # TODO: Return array of strings to indicate which orbital is in which orbital index
     # ^ yeah fat chance nerd
     """
@@ -25,7 +25,10 @@ def parse_data(bandfile, gvecfile, eigfile, guts=False):
                   expansion of each state (list(np.ndarray(int)))
     :rtype: tuple
     """
-    proj, nStates, nBands, nProj, nSpecies, nOrbsPerAtom = jfunc.parse_bandfile(bandfile)
+    if complex_band:
+        proj, nStates, nBands, nProj, nSpecies, nOrbsPerAtom = jfunc.parse_complex_bandfile(bandfile)
+    else:
+        proj, nStates, nBands, nProj, nSpecies, nOrbsPerAtom = jfunc.parse_real_bandfile(bandfile)
     if guts:
         wk, iGarr, k_points, nStates = jfunc.parse_gvecfile(gvecfile)
         E = jfunc.parse_eigfile(eigfile, nStates)

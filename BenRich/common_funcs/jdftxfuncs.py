@@ -8,7 +8,47 @@ def get_start_line(outfile):
             start = i
     return start
 
-def parse_bandfile(bandfile):
+def _get_n_elec_line_reader(line):
+    splitted = line.split(":")
+    for i, el in enumerate(splitted):
+        if "nElectrons" in el:
+            nelidx = i
+    look = splitted[nelidx+1].split(' ')
+    for el in look:
+        if len(el) > 0:
+            return float(el)
+
+def get_n_elec(outfile):
+    start = get_start_line(outfile)
+    with open(outfile) as f:
+        for i, line in enumerate(f):
+            if i > start:
+                if "FillingsUpdate:" in line:
+                    return _get_n_elec_line_reader(line)
+
+
+def _get_n_states_cheap_line_reader(line):
+    splitted = line.split(":")
+    for i, el in enumerate(splitted):
+        if "nStates" in el:
+            nstidx = i
+    return int(splitted[nstidx+1])
+
+
+def get_n_states_cheap(outfile):
+    start = get_start_line(outfile)
+    look = False
+    for i, line in enumerate(open(outfile)):
+        if i >= start:
+            if look:
+                if "nStates:" in line:
+                    return _get_n_states_cheap_line_reader(line)
+            else:
+                if "Setting up k-points, bands, fillings" in line:
+                    look = True
+
+
+def parse_real_bandfile(bandfile):
     """ Parser function for the 'bandProjections' file produced by JDFTx
     :param bandfile: the path to the bandProjections file to parse
     :type bandfile: str
@@ -40,7 +80,44 @@ def parse_bandfile(bandfile):
                 iState = (iLine-(nSpecies+2)) // (nBands+1)
                 iBand = (iLine-(nSpecies+2)) - iState*(nBands+1) - 1
                 if iBand>=0 and iState<nStates:
-                    proj[iState,iBand]=np.array(parse_complex_bandprojection(tokens))
+                    proj[iState,iBand]=np.array(parse_real_bandprojection(tokens))
+    return proj, nStates, nBands, nProj, nSpecies, nOrbsPerAtom
+
+def parse_complex_bandfile(bandfile):
+    """ Parser function for the 'bandProjections' file produced by JDFTx
+    :param bandfile: the path to the bandProjections file to parse
+    :type bandfile: str
+    :return: a tuple containing six elements:
+        - proj: a rank 3 numpy array containing the complex band projection,
+                data (<φ_μ|ψ_j> = T_μj) with dimensions (nStates, nBands, nProj)
+        - nStates: the number of electronic states (integer)
+        - nBands: the number of energy bands (integer)
+        - nProj: the number of band projections (integer)
+        - nSpecies: the number of atomic species (integer)
+        - nOrbsPerAtom: a list containing the number of orbitals considered
+                        for each atom in the crystal structure
+    :rtype: tuple
+    """
+    with open(bandfile, 'r') as f:
+        for iLine, line in enumerate(f):
+            tokens = line.split()
+            if iLine==0:
+                nStates = int(tokens[0])
+                nBands = int(tokens[2])
+                nProj = int(tokens[4])
+                nSpecies = int(tokens[6])
+                proj = np.zeros((nStates,nBands,nProj), dtype=complex)
+                nOrbsPerAtom = []
+            elif iLine>=2:
+                if iLine<nSpecies+2:
+                    nAtoms = int(tokens[1])
+                    nOrbsPerAtom.extend( [int(tokens[2]),] * nAtoms)
+                else:
+                    iState = (iLine-(nSpecies+2)) // (nBands+1)
+                    iBand = (iLine-(nSpecies+2)) - iState*(nBands+1) - 1
+                    if iBand>=0 and iState<nStates:
+                        proj[iState,iBand]=np.array(parse_complex_bandprojection(tokens))
+    f.close()
     return proj, nStates, nBands, nProj, nSpecies, nOrbsPerAtom
 
 def parse_dos(filename):
@@ -138,6 +215,12 @@ def parse_complex_bandprojection(tokens):
         impart = tokens[(2*i) + 1]
         num = complex(float(repart) + float(impart[1:]))
         out.append(num)
+    return out
+
+def parse_real_bandprojection(tokens):
+    out = []
+    for i in range(len(tokens)):
+        out.append(float(tokens[i]))
     return out
 
 def get_grid_shape(outfile):
@@ -432,3 +515,21 @@ def SR_wannier_out(fname):
         if not len(el) == 0:
             S.append(int(el))
     return S, R
+
+
+def get_matching_lines(outfile, str_match):
+    lines = []
+    start = get_start_line(outfile)
+    started = False
+    for i, line in enumerate(open(outfile)):
+        if started:
+            if str_match in line:
+                lines.append(line)
+        elif i == start:
+            started = True
+    return lines
+
+def get_psuedo_lines(outfile):
+    return get_matching_lines(outfile, "ion-species")
+
+
