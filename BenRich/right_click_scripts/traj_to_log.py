@@ -1,4 +1,5 @@
 "Takes an ASE optimization traj file, and turns it into a fake gaussian .logx output file"
+"Note: The energies within the .logx file may not be the true SCF energies found, but the force-consistent energies used in the geometry optimization"
 "WARNING: WILL NOT WORK WITH NEB TRAJS"
 import sys
 file = sys.argv[1]
