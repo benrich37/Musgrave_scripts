@@ -145,11 +145,32 @@ def get_atoms_list_from_out_reset_vars(nAtoms=100, _def=100):
         new_posn, log_vars, E, charges
 
 
+def get_initial_lattice(outfile, start):
+    start_key = "lattice  \\"
+    active = False
+    R = np.zeros([3, 3])
+    lat_row = 0
+    for i, line in enumerate(open(outfile)):
+        if i > start:
+            if active:
+                if lat_row < 3:
+                    R[lat_row, :] = [float(x) for x in line.split()[0:3]]
+                    lat_row += 1
+                else:
+                    active = False
+                    lat_row = 0
+            elif start_key in line:
+                active = True
+    return R
+
+
+
 def get_atoms_list_from_out(outfile):
     start = get_start_line(outfile)
     charge_key = "oxidation-state"
     opts = []
     nAtoms = None
+    initial_lattice = get_initial_lattice(outfile, start)
     R, posns, names, chargeDir, active_posns, active_lowdin, active_lattice, posns, coords, idxMap, j, lat_row, \
         new_posn, log_vars, E, charges = get_atoms_list_from_out_reset_vars()
     for i, line in enumerate(open(outfile)):
@@ -204,6 +225,8 @@ def get_atoms_list_from_out(outfile):
                 elif log_vars:
                     if coords != 'cartesian':
                         posns = np.dot(posns[1], R[2])
+                    if np.sum(R) == 0:
+                        R = initial_lattice
                     opts.append(get_atoms_from_outfile_data(names, posns, R, charges=charges, E=E))
                     R, posns, names, chargeDir, active_posns, active_lowdin, active_lattice, posns, coords, idxMap, j, lat_row, \
                         new_posn, log_vars, E, charges = get_atoms_list_from_out_reset_vars(nAtoms=nAtoms)
@@ -228,7 +251,7 @@ def is_done(outfile):
 def out_to_logx_str(outfile, e_conv=(1/27.211397)):
     atoms_list = get_atoms_list_from_out(outfile)
     dump_str = "\n Entering Link 1 \n \n"
-    do_cell = get_do_cell(atoms_list[0].cell)
+    do_cell = get_do_cell(atoms_list[-1].cell)
     for i in range(len(atoms_list)):
         dump_str += log_input_orientation(atoms_list[i], do_cell=do_cell)
         dump_str += f"\n SCF Done:  E =  {atoms_list[i].E*e_conv}\n\n"
