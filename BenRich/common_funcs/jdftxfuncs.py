@@ -359,7 +359,8 @@ def fmt_num_2(number):
     formatted_exponent = (sign if exponent >= 0 else '-') + str(abs(exponent)).zfill(2)
     return formatted_number + formatted_exponent
 
-def write_densities(out_str: str, dtot: np.ndarray):
+def write_densities(dtot: np.ndarray):
+    out_str = ""
     iterations = int(np.floor(len(dtot) / 5.))
     spill = len(dtot) % 5
     for i in range(spill):
@@ -367,10 +368,14 @@ def write_densities(out_str: str, dtot: np.ndarray):
     range5 = [0,1,2,3,4]
     for i in range(iterations):
         for j in range5:
-            out_str += '\t'
-            out_str += fmt_num_2(dtot[j + 5 * i])
+            num = dtot[j + 5 * i]
+            out_str += ' '
+            if num > 0:
+                out_str += ' '
+            out_str += f"{num:.{10}e}"
             # out_str += funcs.fmt_num_2(dtot[j + 5*i])
         out_str += '\n'
+    return out_str
 
 def chgcar_out(n_up, n_dn, out_path, chgcar_name='CHGCAR', savedir=None, pc=True, noncollin=False):
     # Get required variables
@@ -422,18 +427,14 @@ def chgcar_out(n_up, n_dn, out_path, chgcar_name='CHGCAR', savedir=None, pc=True
         out_str += '   '
         out_str += str(length)
     out_str += ' \n'
-    write_densities(out_str, dtot)
+    out_str += write_densities(dtot)
     out_str += ' \n'
     # Write chgcar
     savepath = ''
     if savedir is not None:
         savepath += savedir
-    if pc:
-        savepath += '//'
-    else:
-        savepath += '/'
     savepath += chgcar_name
-    with open(chgcar_name, 'w') as chgcarfile:
+    with open(savepath, 'w') as chgcarfile:
         chgcarfile.write(out_str)
 
 

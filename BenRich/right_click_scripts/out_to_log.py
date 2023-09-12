@@ -10,6 +10,8 @@ import numpy as np
 from ase.units import Bohr
 from ase import Atoms, Atom
 
+logx_init_str = "\n Entering Link 1 \n \n"
+
 
 def opt_spacer(i, nSteps):
     dump_str = "\n GradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGradGrad\n"
@@ -110,15 +112,17 @@ def get_start_line(outfname):
     return start
 
 
-def get_atoms_from_outfile_data(names, posns, R, charges=None, E=0):
+def get_atoms_from_outfile_data(names, posns, R, charges=None, E=0, momenta=None):
     atoms = Atoms()
     posns *= Bohr
     R = R.T*Bohr
     atoms.cell = R
     if charges is None:
         charges = np.zeros(len(names))
+    if momenta is None:
+        momenta = np.zeros([len(names), 3])
     for i in range(len(names)):
-        atoms.append(Atom(names[i], posns[i], charge=charges[i]))
+        atoms.append(Atom(names[i], posns[i], charge=charges[i], momentum=momenta[i]))
     atoms.E = E
     return atoms
 
@@ -141,8 +145,11 @@ def get_atoms_list_from_out_reset_vars(nAtoms=100, _def=100):
     if nAtoms is None:
         nAtoms = _def
     charges = np.zeros(nAtoms, dtype=float)
+    forces = []
+    active_forces = False
+    coords_forces = None
     return R, posns, names, chargeDir, active_posns, active_lowdin, active_lattice, posns, coords, idxMap, j, lat_row, \
-        new_posn, log_vars, E, charges
+        new_posn, log_vars, E, charges, forces, active_forces, coords_forces
 
 
 def get_initial_lattice(outfile, start):
@@ -163,6 +170,39 @@ def get_initial_lattice(outfile, start):
                 active = True
     return R
 
+def get_input_coord_vars_from_outfile(outfname):
+    start_line = get_start_line(outfname)
+    names = []
+    posns = []
+    R = np.zeros([3,3])
+    lat_row = 0
+    active_lattice = False
+    with open(outfname) as f:
+        for i, line in enumerate(f):
+            if i > start_line:
+                tokens = line.split()
+                if len(tokens) > 0:
+                    if tokens[0] == "ion":
+                        names.append(tokens[1])
+                        posns.append(np.array([float(tokens[2]), float(tokens[3]), float(tokens[4])]))
+                    elif tokens[0] == "lattice":
+                        active_lattice = True
+                    elif active_lattice:
+                        if lat_row < 3:
+                            R[lat_row, :] = [float(x) for x in tokens[:3]]
+                            lat_row += 1
+                        else:
+                            active_lattice = False
+                    elif "Initializing the Grid" in line:
+                        break
+    if not len(names) > 0:
+        raise ValueError("No ion names found")
+    if len(names) != len(posns):
+        raise ValueError("Unequal ion positions/names found")
+    if np.sum(R) == 0:
+        raise ValueError("No lattice matrix found")
+    return names, posns, R
+
 
 
 def get_atoms_list_from_out(outfile):
@@ -170,16 +210,18 @@ def get_atoms_list_from_out(outfile):
     charge_key = "oxidation-state"
     opts = []
     nAtoms = None
-    initial_lattice = get_initial_lattice(outfile, start)
     R, posns, names, chargeDir, active_posns, active_lowdin, active_lattice, posns, coords, idxMap, j, lat_row, \
-        new_posn, log_vars, E, charges = get_atoms_list_from_out_reset_vars()
+        new_posn, log_vars, E, charges, forces, active_forces, coords_forces = get_atoms_list_from_out_reset_vars()
     for i, line in enumerate(open(outfile)):
         if i > start:
             if new_posn:
                 if "Lowdin population analysis " in line:
                     active_lowdin = True
-                if "R =" in line:
+                elif "R =" in line:
                     active_lattice = True
+                elif "# Forces in" in line:
+                    active_forces = True
+                    coords_forces = line.split()[3]
                 elif line.find('# Ionic positions in') >= 0:
                     coords = line.split()[4]
                     active_posns = True
@@ -205,6 +247,15 @@ def get_atoms_list_from_out(outfile):
                         nAtoms = len(names)
                         if len(charges) < nAtoms:
                             charges=np.zeros(nAtoms)
+                ##########
+                elif active_forces:
+                    tokens = line.split()
+                    if len(tokens) and tokens[0] == 'force':
+                        forces.append(np.array([float(tokens[2]), float(tokens[3]), float(tokens[4])]))
+                    else:
+                        forces=np.array(forces)
+                        active_forces = False
+                ##########
                 elif "Minimize: Iter:" in line:
                     if "F: " in line:
                         E = float(line[line.index("F: "):].split(' ')[1])
@@ -223,13 +274,17 @@ def get_atoms_list_from_out(outfile):
                         active_lowdin = False
                         log_vars = True
                 elif log_vars:
+                    if np.sum(R) == 0.0:
+                        R = get_input_coord_vars_from_outfile(outfile)[2]
                     if coords != 'cartesian':
-                        posns = np.dot(posns[1], R[2])
-                    if np.sum(R) == 0:
-                        R = initial_lattice
-                    opts.append(get_atoms_from_outfile_data(names, posns, R, charges=charges, E=E))
+                        posns = np.dot(posns, R)
+                    if len(forces) == 0:
+                        forces = np.zeros([nAtoms, 3])
+                    if coords_forces.lower() != 'cartesian':
+                        forces = np.dot(forces, R)
+                    opts.append(get_atoms_from_outfile_data(names, posns, R, charges=charges, E=E, momenta=forces))
                     R, posns, names, chargeDir, active_posns, active_lowdin, active_lattice, posns, coords, idxMap, j, lat_row, \
-                        new_posn, log_vars, E, charges = get_atoms_list_from_out_reset_vars(nAtoms=nAtoms)
+                        new_posn, log_vars, E, charges, forces, active_forces, coords_forces = get_atoms_list_from_out_reset_vars(nAtoms=nAtoms)
             elif "Computing DFT-D3 correction:" in line:
                 new_posn = True
     return opts
@@ -246,23 +301,56 @@ def is_done(outfile):
                     done = True
     return done
 
+logx_finish_str = " Normal termination of Gaussian 16"
 
+def log_forces(atoms):
+    dump_str = ""
+    # dump_str += " Calling FoFJK, ICntrl=      2527 FMM=F ISym2X=1 I1Cent= 0 IOpClX= 0 NMat=1 NMatS=1 NMatT=0.\n"
+    # dump_str += " ***** Axes restored to original set *****\n"
+    dump_str += "-------------------------------------------------------------------\n"
+    dump_str += " Center     Atomic                   Forces (Hartrees/Bohr)\n"
+    dump_str += " Number     Number              X              Y              Z\n"
+    dump_str += " -------------------------------------------------------------------\n"
+    forces = []
+    try:
+        momenta = atoms.get_momenta()
+    except Exception as e:
+        print(e)
+        momenta = np.zeros([len(atoms.get_atomic_numbers()), 3])
+    for i, number in enumerate(atoms.get_atomic_numbers()):
+        add_str = f" {i+1} {number}"
+        force = momenta[i]
+        forces.append(np.linalg.norm(force))
+        for j in range(3):
+            add_str += f"\t{force[j]:.9f}"
+        add_str += "\n"
+        dump_str += add_str
+    dump_str += " -------------------------------------------------------------------\n"
+    forces = np.array(forces)
+    dump_str += f" Cartesian Forces:  Max {max(forces):.9f} RMS {np.std(forces):.9f}\n"
+    return dump_str
 
-def out_to_logx_str(outfile, e_conv=(1/27.211397)):
+def out_to_logx_str(outfile, use_force=False, e_conv=(1/27.211397)):
     atoms_list = get_atoms_list_from_out(outfile)
-    dump_str = "\n Entering Link 1 \n \n"
-    do_cell = get_do_cell(atoms_list[-1].cell)
+    dump_str = logx_init_str
+    do_cell = get_do_cell(atoms_list[0].cell)
+    if use_force:
+        do_cell = False
     for i in range(len(atoms_list)):
         dump_str += log_input_orientation(atoms_list[i], do_cell=do_cell)
         dump_str += f"\n SCF Done:  E =  {atoms_list[i].E*e_conv}\n\n"
         dump_str += log_charges(atoms_list[i])
+        dump_str += log_forces(atoms_list[i])
         dump_str += opt_spacer(i, len(atoms_list))
     if is_done(outfile):
         dump_str += log_input_orientation(atoms_list[-1])
-        dump_str += " Normal termination of Gaussian 16"
+        dump_str += logx_finish_str
     return dump_str
 
 assert "out" in file
 with open(file + ".logx", "w") as f:
     f.write(out_to_logx_str(file))
+    f.close()
+with open(file + "_wforce.logx", "w") as f:
+    f.write(out_to_logx_str(file, use_force=True))
     f.close()
