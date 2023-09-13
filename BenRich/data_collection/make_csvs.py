@@ -14,8 +14,10 @@ from os import listdir, remove
 from os.path import isdir, join as opj, exists as ope
 
 ##################### USER INPUTS (Change these before running) #####################
-calcs_path = "D:\\scratch_backup\\perl\\amm_bin\\calcs"
-surf_name = "HfP_110"
+# calcs_path = "D:\\scratch_backup\\perl\\amm_bin\\calcs"
+# surf_name = "HfP_110"
+calcs_path = "/pscratch/sd/b/beri9208/amm_bin/calcs"
+surf_name = "Nb2C_010"
 #####################################################################################
 
 
@@ -27,28 +29,31 @@ mols_order = ["N2", "N2H", "NNH2", "NHNH2", "NH2NH2", "N", "NH", "NH2", "NH3"]
 def get_ecomp_path(path):
     ecomp_path = ""
     found = False
-    if ope(opj(path, "Ecomponents")):
-        ecomp_path = opj(path, "Ecomponents")
-        found = True
+    if ope(path):
+        if ope(opj(path, "Ecomponents")):
+            ecomp_path = opj(path, "Ecomponents")
+            found = True
+        else:
+            contents = listdir(path)
+            for f in contents:
+                sub_dir = opj(path, f)
+                if isdir(sub_dir) and ope(opj(sub_dir, "Ecomponents")):
+                    ecomp_path = opj(sub_dir, "Ecomponents")
+                    found = True
     else:
-        contents = listdir(path)
-        for f in contents:
-            sub_dir = opj(path, f)
-            if isdir(sub_dir) and ope(opj(sub_dir, "Ecomponents")):
-                ecomp_path = opj(sub_dir, "Ecomponents")
-                found = True
+        print(f"{path} does not exist")
     return ecomp_path, found
 
 
 def get_nrg(calc_dir, nrg_key):
     ecomp, found = get_ecomp_path(calc_dir)
-    nrg = 0
+    nrg = 0.
     if found:
         with open(ecomp) as f:
             for line in f:
                 if "=" in line:
                     key = line.split("=")[0].strip()
-                    val = line.split("=")[1].strip()
+                    val = float(line.split("=")[1].strip())
                     if key == nrg_key:
                         nrg = val
     else:
@@ -56,17 +61,22 @@ def get_nrg(calc_dir, nrg_key):
     return nrg
 
 def get_lowest_ads_data(ads_dir, nrg_key):
-    sites = listdir(ads_dir)
-    nrgs = []
-    paths = []
-    for site in sites:
-        if not site[0] == "_":
-            site_dir = opj(ads_dir, site)
-            if isdir(site_dir):
-                nrgs.append(get_nrg(site_dir, nrg_key))
-                paths.append(str(site_dir))
-    min_nrg = min(nrgs)
-    min_path = paths[nrgs.index(min_nrg)]
+    min_nrg = 0
+    min_path = ""
+    if ope(ads_dir):
+        sites = listdir(ads_dir)
+        nrgs = []
+        paths = []
+        for site in sites:
+            if not site[0] == "_":
+                site_dir = opj(ads_dir, site)
+                if ope(site_dir) and isdir(site_dir):
+                    nrgs.append(get_nrg(site_dir, nrg_key))
+                    paths.append(str(site_dir))
+        min_nrg = min(nrgs)
+        min_path = paths[nrgs.index(min_nrg)]
+    else:
+        print(f"{ads_dir} does not exist")
     return min_nrg, min_path
 
 def save_mins_to_csvs(calcs_path, surf_name):
@@ -89,10 +99,8 @@ def save_mins_to_csvs(calcs_path, surf_name):
     for j, mol in enumerate(mols_order):
         ads_dir = opj(adsorbed_dir, opj(mol, "No_bias"))
         min_nrg, min_path = get_lowest_ads_data(ads_dir, "F")
-        print(min_path)
         nrgs_array[0, j + 1] = min_nrg
         paths_array[0, j + 1] = min_path
-    print(paths_array)
     nrgs_fname = opj(calcs_path, f"{surf_name}_nrgs.csv")
     paths_fname = opj(calcs_path, f"{surf_name}_paths.csv")
     for p in [nrgs_fname, paths_fname]:
