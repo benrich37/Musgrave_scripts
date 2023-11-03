@@ -1,5 +1,6 @@
 import numpy as np
 from numba import jit
+from os.path import join as opj
 
 def get_start_line(outfile):
     start = None
@@ -83,6 +84,26 @@ def parse_real_bandfile(bandfile):
                     proj[iState,iBand]=np.array(parse_real_bandprojection(tokens))
     return proj, nStates, nBands, nProj, nSpecies, nOrbsPerAtom
 
+def get_nOrbsPerAtoms(bandfile):
+    with open(bandfile, 'r') as f:
+        for iLine, line in enumerate(f):
+            tokens = line.split()
+            if iLine==0:
+                nStates = int(tokens[0])
+                nBands = int(tokens[2])
+                nProj = int(tokens[4])
+                nSpecies = int(tokens[6])
+                proj = np.zeros((nStates,nBands,nProj), dtype=complex)
+                nOrbsPerAtom = []
+            elif iLine>=2:
+                if iLine<nSpecies+2:
+                    nAtoms = int(tokens[1])
+                    nOrbsPerAtom.extend( [int(tokens[2]),] * nAtoms)
+                else:
+                    return nOrbsPerAtom
+    f.close()
+
+
 def parse_complex_bandfile(bandfile):
     """ Parser function for the 'bandProjections' file produced by JDFTx
     :param bandfile: the path to the bandProjections file to parse
@@ -137,6 +158,20 @@ def parse_dos(filename):
             data.append(line.rstrip('\n').split('\t'))
     data = np.array(data, dtype=float).T
     return header, data
+
+def parse_kptsfile(kptsfile):
+    wk_list = []
+    k_points_list = []
+    with open(kptsfile, "r") as f:
+        for line in f:
+            k_points = line.split("[")[1].split("]")[0].strip().split()
+            k_points = [float(v) for v in k_points]
+            k_points_list.append(k_points)
+            wk = float(line.split("]")[1].strip().split()[0])
+            wk_list.append(wk)
+    nStates = len(wk_list)
+    return wk_list, k_points_list, nStates
+
 
 def parse_gvecfile(gvecfile):
     """ Parser function for the 'Gvectors' file produced by JDFTx
@@ -213,9 +248,23 @@ def parse_complex_bandprojection(tokens):
     for i in range(int(len(tokens)/2)):
         repart = tokens[2*i]
         impart = tokens[(2*i) + 1]
-        num = complex(float(repart) + float(impart[1:]))
+        num = complex(float(repart), float(impart))
         out.append(num)
     return out
+
+
+# def parse_complex_bandprojection_new(tokens):
+#     """ Should work with new JDFTx commit
+#     :param tokens: Parsed data from bandProjections file
+#     :return out: data in the normal numpy complex data format (list(complex))
+#     """
+#     out = []
+#     for i in range(int(len(tokens)/2)):
+#         repart = tokens[2*i]
+#         impart = tokens[(2*i) + 1]
+#         num = complex(float(repart) + float(impart))
+#         out.append(num)
+#     return out
 
 def parse_real_bandprojection(tokens):
     out = []
@@ -533,4 +582,68 @@ def get_matching_lines(outfile, str_match):
 def get_psuedo_lines(outfile):
     return get_matching_lines(outfile, "ion-species")
 
+def orbs_idx_dict(outfile, nOrbsPerAtom):
+    ionPos, ionNames, R = get_coords_vars(outfile)
+    ion_names, ion_counts = count_ions(ionNames)
+    orbs_dict = orbs_idx_dict_helper(ion_names, ion_counts, nOrbsPerAtom)
+    return orbs_dict
 
+def orbs_idx_dict_helper(ion_names, ion_counts, nOrbsPerAtom):
+    orbs_dict_out = {}
+    iOrb = 0
+    atom = 0
+    for i, count in enumerate(ion_counts):
+        for atom_num in range(count):
+            atom_label = ion_names[i] + ' #' + str(atom_num + 1)
+            norbs = nOrbsPerAtom[atom]
+            orbs_dict_out[atom_label] = list(range(iOrb, iOrb + norbs))
+            iOrb += norbs
+            atom += 1
+    return orbs_dict_out
+
+
+def get_kfolding(outfile):
+    key = "kpoint-folding "
+    with open(outfile, "r") as f:
+        for i, line in enumerate(f):
+            if key in line:
+                val = np.array(line.split(key)[1].strip().split(), dtype=int)
+                return val
+
+
+def get_mu(outfile):
+    mu = 0
+    lookkey = "FillingsUpdate:  mu:"
+    with open(outfile, "r") as f:
+        for line in f:
+            if lookkey in line:
+                mu = float(line.split(lookkey)[1].strip().split()[0])
+    return mu
+
+def get_atom_orb_labels_dict(root):
+    fname = opj(root, "bandProjections")
+    labels_dict = {}
+    ref_lists = [
+        ["s"],
+        ["px", "py", "pz"],
+        ["dxy", "dxz", "dyz", "dx2y2", "dz2"]
+    ]
+    with open(fname, "r") as f:
+        for i, line in enumerate(f):
+            if i > 1:
+                if "#" in line:
+                    return labels_dict
+                else:
+                    lsplit = line.strip().split()
+                    sym = lsplit[0]
+                    labels_dict[sym] = []
+                    lmax = int(lsplit[3])
+                    for j in range(lmax+1):
+                        refs = ref_lists[j]
+                        nShells = int(lsplit[4+j])
+                        for k in range(nShells):
+                            if nShells > 1:
+                                for r in refs:
+                                    labels_dict[sym].append(f"{k}{r}")
+                            else:
+                                labels_dict[sym] += refs
