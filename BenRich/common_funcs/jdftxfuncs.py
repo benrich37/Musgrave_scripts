@@ -103,6 +103,17 @@ def get_nOrbsPerAtoms(bandfile):
                     return nOrbsPerAtom
     f.close()
 
+def is_complex_bandfile(bandfile):
+    with open(bandfile, 'r') as f:
+        for i, line in enumerate(f):
+            if i == 4:
+                if "|projection|^2" in line:
+                    return False
+                else:
+                    return True
+
+
+
 
 def parse_complex_bandfile(bandfile):
     """ Parser function for the 'bandProjections' file produced by JDFTx
@@ -119,6 +130,7 @@ def parse_complex_bandfile(bandfile):
                         for each atom in the crystal structure
     :rtype: tuple
     """
+    is_complex = is_complex_bandfile(bandfile)
     with open(bandfile, 'r') as f:
         for iLine, line in enumerate(f):
             tokens = line.split()
@@ -127,7 +139,13 @@ def parse_complex_bandfile(bandfile):
                 nBands = int(tokens[2])
                 nProj = int(tokens[4])
                 nSpecies = int(tokens[6])
-                proj = np.zeros((nStates,nBands,nProj), dtype=complex)
+                if is_complex:
+                    proj = np.zeros((nStates,nBands,nProj), dtype=complex)
+                    parser = parse_complex_bandprojection
+                else:
+                    proj = np.zeros((nStates, nBands, nProj), dtype=float)
+                    parser = parse_real_bandprojection
+                    raise Warning("Bandprojections file contains |proj|^2, not proj - invalid data for COHP analysis \n (next time add 'band-projection-params yes no' to inputs file)")
                 nOrbsPerAtom = []
             elif iLine>=2:
                 if iLine<nSpecies+2:
@@ -137,7 +155,7 @@ def parse_complex_bandfile(bandfile):
                     iState = (iLine-(nSpecies+2)) // (nBands+1)
                     iBand = (iLine-(nSpecies+2)) - iState*(nBands+1) - 1
                     if iBand>=0 and iState<nStates:
-                        proj[iState,iBand]=np.array(parse_complex_bandprojection(tokens))
+                        proj[iState,iBand]=np.array(parser(tokens))
     f.close()
     return proj, nStates, nBands, nProj, nSpecies, nOrbsPerAtom
 
@@ -251,20 +269,6 @@ def parse_complex_bandprojection(tokens):
         num = complex(float(repart), float(impart))
         out.append(num)
     return out
-
-
-# def parse_complex_bandprojection_new(tokens):
-#     """ Should work with new JDFTx commit
-#     :param tokens: Parsed data from bandProjections file
-#     :return out: data in the normal numpy complex data format (list(complex))
-#     """
-#     out = []
-#     for i in range(int(len(tokens)/2)):
-#         repart = tokens[2*i]
-#         impart = tokens[(2*i) + 1]
-#         num = complex(float(repart) + float(impart))
-#         out.append(num)
-#     return out
 
 def parse_real_bandprojection(tokens):
     out = []
@@ -626,7 +630,8 @@ def get_atom_orb_labels_dict(root):
     ref_lists = [
         ["s"],
         ["px", "py", "pz"],
-        ["dxy", "dxz", "dyz", "dx2y2", "dz2"]
+        ["dxy", "dxz", "dyz", "dx2y2", "dz2"],
+        ["fx3-3xy2", "fyx2-yz2", "fxz2", "fz3", "fyz2", "fxyz", "f3yx2-y3"]
     ]
     with open(fname, "r") as f:
         for i, line in enumerate(f):
