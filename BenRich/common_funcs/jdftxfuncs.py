@@ -157,6 +157,8 @@ def parse_complex_bandfile(bandfile):
                     if iBand>=0 and iState<nStates:
                         proj[iState,iBand]=np.array(parser(tokens))
     f.close()
+    if not is_complex:
+        proj = np.sqrt(proj) # To avoid rewriting seperate pDOS functions for normed bandProjections
     return proj, nStates, nBands, nProj, nSpecies, nOrbsPerAtom
 
 def parse_dos(filename):
