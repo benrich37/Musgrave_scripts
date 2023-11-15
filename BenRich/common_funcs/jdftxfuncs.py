@@ -1,6 +1,7 @@
 import numpy as np
 from numba import jit
 from os.path import join as opj
+import warnings
 
 def get_start_line(outfile):
     start = None
@@ -145,7 +146,7 @@ def parse_complex_bandfile(bandfile):
                 else:
                     proj = np.zeros((nStates, nBands, nProj), dtype=float)
                     parser = parse_real_bandprojection
-                    raise Warning("Bandprojections file contains |proj|^2, not proj - invalid data for COHP analysis \n (next time add 'band-projection-params yes no' to inputs file)")
+                    warnings.warn("Bandprojections file contains |proj|^2, not proj - invalid data for COHP analysis \n (next time add 'band-projection-params yes no' to inputs file)")
                 nOrbsPerAtom = []
             elif iLine>=2:
                 if iLine<nSpecies+2:
