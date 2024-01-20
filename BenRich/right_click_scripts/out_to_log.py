@@ -203,17 +203,26 @@ def get_input_coord_vars_from_outfile(outfname):
         raise ValueError("No lattice matrix found")
     return names, posns, R
 
+def get_start_lines(outfname, add_end=False):
+    start_lines = []
+    end_line = 0
+    for i, line in enumerate(open(outfname)):
+        if "JDFTx 1." in line:
+            start_lines.append(i)
+        end_line = i
+    if add_end:
+        start_lines.append(i)
+    return start_lines
 
 
-def get_atoms_list_from_out(outfile):
-    start = get_start_line(outfile)
+def get_atoms_list_from_out_slice(outfile, i_start, i_end):
     charge_key = "oxidation-state"
     opts = []
     nAtoms = None
     R, posns, names, chargeDir, active_posns, active_lowdin, active_lattice, posns, coords, idxMap, j, lat_row, \
         new_posn, log_vars, E, charges, forces, active_forces, coords_forces = get_atoms_list_from_out_reset_vars()
     for i, line in enumerate(open(outfile)):
-        if i > start:
+        if i > i_start and i < i_end:
             if new_posn:
                 if "Lowdin population analysis " in line:
                     active_lowdin = True
@@ -238,22 +247,22 @@ def get_atoms_list_from_out(outfile):
                         names.append(tokens[1])
                         posns.append(np.array([float(tokens[2]), float(tokens[3]), float(tokens[4])]))
                         if tokens[1] not in idxMap:
-                                idxMap[tokens[1]] = []
+                            idxMap[tokens[1]] = []
                         idxMap[tokens[1]].append(j)
                         j += 1
                     else:
-                        posns=np.array(posns)
+                        posns = np.array(posns)
                         active_posns = False
                         nAtoms = len(names)
                         if len(charges) < nAtoms:
-                            charges=np.zeros(nAtoms)
+                            charges = np.zeros(nAtoms)
                 ##########
                 elif active_forces:
                     tokens = line.split()
                     if len(tokens) and tokens[0] == 'force':
                         forces.append(np.array([float(tokens[2]), float(tokens[3]), float(tokens[4])]))
                     else:
-                        forces=np.array(forces)
+                        forces = np.array(forces)
                         active_forces = False
                 ##########
                 elif "Minimize: Iter:" in line:
@@ -284,10 +293,103 @@ def get_atoms_list_from_out(outfile):
                         forces = np.dot(forces, R)
                     opts.append(get_atoms_from_outfile_data(names, posns, R, charges=charges, E=E, momenta=forces))
                     R, posns, names, chargeDir, active_posns, active_lowdin, active_lattice, posns, coords, idxMap, j, lat_row, \
-                        new_posn, log_vars, E, charges, forces, active_forces, coords_forces = get_atoms_list_from_out_reset_vars(nAtoms=nAtoms)
+                        new_posn, log_vars, E, charges, forces, active_forces, coords_forces = get_atoms_list_from_out_reset_vars(
+                        nAtoms=nAtoms)
             elif "Computing DFT-D3 correction:" in line:
                 new_posn = True
     return opts
+
+def get_atoms_list_from_out(outfile):
+    start_lines = get_start_lines(outfile, add_end=True)
+    atoms_list = []
+    for i in range(len(start_lines) - 1):
+        atoms_list += get_atoms_list_from_out_slice(outfile, start_lines[i], start_lines[i+1])
+    return atoms_list
+
+
+# def get_atoms_list_from_out(outfile):
+#     start = get_start_line(outfile)
+#     charge_key = "oxidation-state"
+#     opts = []
+#     nAtoms = None
+#     R, posns, names, chargeDir, active_posns, active_lowdin, active_lattice, posns, coords, idxMap, j, lat_row, \
+#         new_posn, log_vars, E, charges, forces, active_forces, coords_forces = get_atoms_list_from_out_reset_vars()
+#     for i, line in enumerate(open(outfile)):
+#         if i > start:
+#             if new_posn:
+#                 if "Lowdin population analysis " in line:
+#                     active_lowdin = True
+#                 elif "R =" in line:
+#                     active_lattice = True
+#                 elif "# Forces in" in line:
+#                     active_forces = True
+#                     coords_forces = line.split()[3]
+#                 elif line.find('# Ionic positions in') >= 0:
+#                     coords = line.split()[4]
+#                     active_posns = True
+#                 elif active_lattice:
+#                     if lat_row < 3:
+#                         R[lat_row, :] = [float(x) for x in line.split()[1:-1]]
+#                         lat_row += 1
+#                     else:
+#                         active_lattice = False
+#                         lat_row = 0
+#                 elif active_posns:
+#                     tokens = line.split()
+#                     if len(tokens) and tokens[0] == 'ion':
+#                         names.append(tokens[1])
+#                         posns.append(np.array([float(tokens[2]), float(tokens[3]), float(tokens[4])]))
+#                         if tokens[1] not in idxMap:
+#                                 idxMap[tokens[1]] = []
+#                         idxMap[tokens[1]].append(j)
+#                         j += 1
+#                     else:
+#                         posns=np.array(posns)
+#                         active_posns = False
+#                         nAtoms = len(names)
+#                         if len(charges) < nAtoms:
+#                             charges=np.zeros(nAtoms)
+#                 ##########
+#                 elif active_forces:
+#                     tokens = line.split()
+#                     if len(tokens) and tokens[0] == 'force':
+#                         forces.append(np.array([float(tokens[2]), float(tokens[3]), float(tokens[4])]))
+#                     else:
+#                         forces=np.array(forces)
+#                         active_forces = False
+#                 ##########
+#                 elif "Minimize: Iter:" in line:
+#                     if "F: " in line:
+#                         E = float(line[line.index("F: "):].split(' ')[1])
+#                     elif "G: " in line:
+#                         E = float(line[line.index("G: "):].split(' ')[1])
+#                 elif active_lowdin:
+#                     if charge_key in line:
+#                         look = line.rstrip('\n')[line.index(charge_key):].split(' ')
+#                         symbol = str(look[1])
+#                         line_charges = [float(val) for val in look[2:]]
+#                         chargeDir[symbol] = line_charges
+#                         for atom in list(chargeDir.keys()):
+#                             for k, idx in enumerate(idxMap[atom]):
+#                                 charges[idx] += chargeDir[atom][k]
+#                     elif "#" not in line:
+#                         active_lowdin = False
+#                         log_vars = True
+#                 elif log_vars:
+#                     if np.sum(R) == 0.0:
+#                         R = get_input_coord_vars_from_outfile(outfile)[2]
+#                     if coords != 'cartesian':
+#                         posns = np.dot(posns, R)
+#                     if len(forces) == 0:
+#                         forces = np.zeros([nAtoms, 3])
+#                     if coords_forces.lower() != 'cartesian':
+#                         forces = np.dot(forces, R)
+#                     opts.append(get_atoms_from_outfile_data(names, posns, R, charges=charges, E=E, momenta=forces))
+#                     R, posns, names, chargeDir, active_posns, active_lowdin, active_lattice, posns, coords, idxMap, j, lat_row, \
+#                         new_posn, log_vars, E, charges, forces, active_forces, coords_forces = get_atoms_list_from_out_reset_vars(nAtoms=nAtoms)
+#             elif "Computing DFT-D3 correction:" in line:
+#                 new_posn = True
+#     return opts
 
 def is_done(outfile):
     start_line = get_start_line(outfile)
@@ -336,12 +438,19 @@ def out_to_logx_str(outfile, use_force=False, e_conv=(1/27.211397)):
     do_cell = get_do_cell(atoms_list[0].cell)
     if use_force:
         do_cell = False
-    for i in range(len(atoms_list)):
-        dump_str += log_input_orientation(atoms_list[i], do_cell=do_cell)
-        dump_str += f"\n SCF Done:  E =  {atoms_list[i].E*e_conv}\n\n"
-        dump_str += log_charges(atoms_list[i])
-        dump_str += log_forces(atoms_list[i])
-        dump_str += opt_spacer(i, len(atoms_list))
+    if use_force:
+        for i in range(len(atoms_list)):
+            dump_str += log_input_orientation(atoms_list[i], do_cell=do_cell)
+            dump_str += f"\n SCF Done:  E =  {atoms_list[i].E*e_conv}\n\n"
+            dump_str += log_charges(atoms_list[i])
+            dump_str += log_forces(atoms_list[i])
+            dump_str += opt_spacer(i, len(atoms_list))
+    else:
+        for i in range(len(atoms_list)):
+            dump_str += log_input_orientation(atoms_list[i], do_cell=do_cell)
+            dump_str += f"\n SCF Done:  E =  {atoms_list[i].E*e_conv}\n\n"
+            dump_str += log_charges(atoms_list[i])
+            dump_str += opt_spacer(i, len(atoms_list))
     if is_done(outfile):
         dump_str += log_input_orientation(atoms_list[-1])
         dump_str += logx_finish_str
@@ -351,6 +460,6 @@ assert "out" in file
 with open(file + ".logx", "w") as f:
     f.write(out_to_logx_str(file))
     f.close()
-with open(file + "_wforce.logx", "w") as f:
-    f.write(out_to_logx_str(file, use_force=True))
-    f.close()
+# with open(file + "_wforce.logx", "w") as f:
+#     f.write(out_to_logx_str(file, use_force=True))
+#     f.close()
