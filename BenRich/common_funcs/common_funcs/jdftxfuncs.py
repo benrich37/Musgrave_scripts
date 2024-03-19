@@ -1,13 +1,19 @@
 import numpy as np
 from numba import jit
+from ase import Atoms, Atom
+from ase.units import Bohr
 from os.path import join as opj
 import warnings
 
 def get_start_line(outfile):
     start = None
     for i, line in enumerate(open(outfile)):
-        if 'JDFTx' in line and '***' in line:
+        if ('JDFTx' in line) and ('***' in line):
             start = i
+    if start is None:
+        for i, line in enumerate(open(outfile)):
+            if ("Input parsed successfully" in line):
+                start = i
     return start
 
 def _get_n_elec_line_reader(line):
@@ -26,7 +32,8 @@ def get_n_elec(outfile):
         for i, line in enumerate(f):
             if i > start:
                 if "FillingsUpdate:" in line:
-                    return _get_n_elec_line_reader(line)
+                    nelec =  _get_n_elec_line_reader(line)
+    return nelec
 
 
 def _get_n_states_cheap_line_reader(line):
@@ -105,13 +112,16 @@ def get_nOrbsPerAtoms(bandfile):
     f.close()
 
 def is_complex_bandfile(bandfile):
+    hash_lines = 0
     with open(bandfile, 'r') as f:
         for i, line in enumerate(f):
-            if i == 4:
-                if "|projection|^2" in line:
-                    return False
-                else:
-                    return True
+            if "#" in line:
+                hash_lines += 1
+                if hash_lines == 2:
+                    if "|projection|^2" in line:
+                        return False
+                    else:
+                        return True
 
 
 
@@ -327,6 +337,53 @@ def get_vars(outfile):
     else:
         return S, R
 
+# def get_coords_vars(outfile):
+#     """ get ionPos, ionNames, and R from outfile
+#     :param outfile: Path to output file (str)
+#     :return:
+#         - ionPos: ion positions in lattice coordinates (np.ndarray(float))
+#         - ionNames: atom names (list(str))
+#         - R: lattice vectors (np.ndarray(float))
+#     :rtype: tuple
+#     """
+#     start = get_start_line(outfile)
+#     iLine = 0
+#     refLine = -10
+#     R = np.zeros((3, 3))
+#     Rdone = False
+#     ionPosStarted = False
+#     ionNames = []
+#     ionPos = []
+#     for i, line in enumerate(open(outfile)):
+#         if i > start:
+#             # Lattice vectors:
+#             if line.find('Initializing the Grid') >= 0 and (not Rdone):
+#                 refLine = iLine
+#             rowNum = iLine - (refLine + 2)
+#             if rowNum >= 0 and rowNum < 3:
+#                 R[rowNum, :] = [float(x) for x in line.split()[1:-1]]
+#             if rowNum == 3:
+#                 refLine = -10
+#                 Rdone = True
+#             # Coordinate system and ionic positions:
+#             if ionPosStarted:
+#                 tokens = line.split()
+#                 if len(tokens) and tokens[0] == 'ion':
+#                     ionNames.append(tokens[1])
+#                     ionPos.append([float(tokens[2]), float(tokens[3]), float(tokens[4])])
+#                 else:
+#                     break
+#             if line.find('# Ionic positions in') >= 0:
+#                 coords = line.split()[4]
+#                 ionPosStarted = True
+#             # Line counter:
+#             iLine += 1
+#     ionPos = np.array(ionPos)
+#     if coords != 'lattice':
+#         ionPos = np.dot(ionPos, np.linalg.inv(R.T))  # convert to lattice
+#     return ionPos, ionNames, R
+
+
 def get_coords_vars(outfile):
     """ get ionPos, ionNames, and R from outfile
     :param outfile: Path to output file (str)
@@ -347,25 +404,26 @@ def get_coords_vars(outfile):
     for i, line in enumerate(open(outfile)):
         if i > start:
             # Lattice vectors:
-            if line.find('Initializing the Grid') >= 0 and (not Rdone):
+            # if line.find('Initializing the Grid') >= 0 and (not Rdone):
+            #     refLine = iLine
+            if line[:9] == "lattice  " and (not Rdone):
                 refLine = iLine
-            rowNum = iLine - (refLine + 2)
+            rowNum = iLine - (refLine + 1)
             if rowNum >= 0 and rowNum < 3:
-                R[rowNum, :] = [float(x) for x in line.split()[1:-1]]
+                vals = line.split()
+                vals = vals[0:3]
+                R[rowNum, :] = [float(x) for x in vals]
             if rowNum == 3:
                 refLine = -10
                 Rdone = True
             # Coordinate system and ionic positions:
-            if ionPosStarted:
+            if line[:4] == "ion ":
                 tokens = line.split()
-                if len(tokens) and tokens[0] == 'ion':
-                    ionNames.append(tokens[1])
-                    ionPos.append([float(tokens[2]), float(tokens[3]), float(tokens[4])])
-                else:
-                    break
-            if line.find('# Ionic positions in') >= 0:
-                coords = line.split()[4]
-                ionPosStarted = True
+                ionNames.append(tokens[1])
+                ionPos.append([float(tokens[2]), float(tokens[3]), float(tokens[4])])
+            if line.find('coords-type ') >= 0:
+                coords = line.strip().split()[-1]
+                # ionPosStarted = True
             # Line counter:
             iLine += 1
     ionPos = np.array(ionPos)
@@ -571,7 +629,7 @@ def SR_wannier_out(fname):
     for el in Sline:
         if not len(el) == 0:
             S.append(int(el))
-    return S, R
+    return np.array(S), np.array(R)
 
 
 def get_matching_lines(outfile, str_match):
@@ -590,7 +648,8 @@ def get_psuedo_lines(outfile):
     return get_matching_lines(outfile, "ion-species")
 
 def orbs_idx_dict(outfile, nOrbsPerAtom):
-    ionPos, ionNames, R = get_coords_vars(outfile)
+    ionNames, ionPos, R = get_input_coord_vars_from_outfile(outfile)
+    # ionPos, ionNames, R = get_coords_vars(outfile)
     ion_names, ion_counts = count_ions(ionNames)
     orbs_dict = orbs_idx_dict_helper(ion_names, ion_counts, nOrbsPerAtom)
     return orbs_dict
@@ -655,3 +714,193 @@ def get_atom_orb_labels_dict(root):
                                     labels_dict[sym].append(f"{k}{r}")
                             else:
                                 labels_dict[sym] += refs
+
+
+def get_atoms_from_out(outfile):
+    atoms_list = get_atoms_list_from_out(outfile)
+    return atoms_list[-1]
+
+def get_start_lines(outfname, add_end=False):
+    start_lines = []
+    for i, line in enumerate(open(outfname)):
+        if "JDFTx 1." in line:
+            start_lines.append(i)
+    if add_end:
+        start_lines.append(i)
+    return start_lines
+
+def get_atoms_list_from_out(outfile):
+    start_lines = get_start_lines(outfile, add_end=True)
+    for i in range(len(start_lines) - 1):
+        i_start = start_lines[::-1][i+1]
+        i_end = start_lines[::-1][i]
+        atoms_list = get_atoms_list_from_out_slice(outfile, i_start, i_end)
+        if type(atoms_list) is list:
+            if len(atoms_list):
+                return atoms_list
+    erstr = "Failed getting atoms list from out file"
+    raise ValueError(erstr)
+
+
+def get_atoms_list_from_out_reset_vars(nAtoms=100, _def=100):
+    R = np.zeros([3, 3])
+    posns = []
+    names = []
+    chargeDir = {}
+    active_lattice = False
+    lat_row = 0
+    active_posns = False
+    log_vars = False
+    coords = None
+    new_posn = False
+    active_lowdin = False
+    idxMap = {}
+    j = 0
+    E = 0
+    if nAtoms is None:
+        nAtoms = _def
+    charges = np.zeros(nAtoms, dtype=float)
+    forces = []
+    active_forces = False
+    coords_forces = None
+    return R, posns, names, chargeDir, active_posns, active_lowdin, active_lattice, posns, coords, idxMap, j, lat_row, \
+        new_posn, log_vars, E, charges, forces, active_forces, coords_forces
+
+
+def get_input_coord_vars_from_outfile(outfname):
+    start_line = get_start_line(outfname)
+    names = []
+    posns = []
+    R = np.zeros([3,3])
+    lat_row = 0
+    active_lattice = False
+    with open(outfname) as f:
+        for i, line in enumerate(f):
+            if i > start_line:
+                tokens = line.split()
+                if len(tokens) > 0:
+                    if tokens[0] == "ion":
+                        names.append(tokens[1])
+                        posns.append(np.array([float(tokens[2]), float(tokens[3]), float(tokens[4])]))
+                    elif tokens[0] == "lattice":
+                        active_lattice = True
+                    elif active_lattice:
+                        if lat_row < 3:
+                            R[lat_row, :] = [float(x) for x in tokens[:3]]
+                            lat_row += 1
+                        else:
+                            active_lattice = False
+                    elif "Initializing the Grid" in line:
+                        break
+    if not len(names) > 0:
+        raise ValueError("No ion names found")
+    if len(names) != len(posns):
+        raise ValueError("Unequal ion positions/names found")
+    if np.sum(R) == 0:
+        raise ValueError("No lattice matrix found")
+    return names, np.array(posns), R
+
+def get_inputs_atoms_from_outfile(outfname):
+    names, posns, R = get_input_coord_vars_from_outfile(outfname)
+    atoms = get_atoms_from_outfile_data(names, posns, R)
+    return atoms
+
+
+def get_atoms_from_outfile_data(names, posns, R, charges=None, E=0, momenta=None):
+    atoms = Atoms()
+    posns *= Bohr
+    R = R.T*Bohr
+    atoms.cell = R
+    if charges is None:
+        charges = np.zeros(len(names))
+    if momenta is None:
+        momenta = np.zeros([len(names), 3])
+    for i in range(len(names)):
+        atoms.append(Atom(names[i], posns[i], charge=charges[i], momentum=momenta[i]))
+    atoms.E = E
+    return atoms
+
+
+def get_atoms_list_from_out_slice(outfile, i_start, i_end):
+    charge_key = "oxidation-state"
+    opts = []
+    nAtoms = None
+    R, posns, names, chargeDir, active_posns, active_lowdin, active_lattice, posns, coords, idxMap, j, lat_row, \
+        new_posn, log_vars, E, charges, forces, active_forces, coords_forces = get_atoms_list_from_out_reset_vars()
+    for i, line in enumerate(open(outfile)):
+        if i > i_start and i < i_end:
+            if new_posn:
+                if "Lowdin population analysis " in line:
+                    active_lowdin = True
+                elif "R =" in line:
+                    active_lattice = True
+                elif "# Forces in" in line:
+                    active_forces = True
+                    coords_forces = line.split()[3]
+                elif line.find('# Ionic positions in') >= 0:
+                    coords = line.split()[4]
+                    active_posns = True
+                elif active_lattice:
+                    if lat_row < 3:
+                        R[lat_row, :] = [float(x) for x in line.split()[1:-1]]
+                        lat_row += 1
+                    else:
+                        active_lattice = False
+                        lat_row = 0
+                elif active_posns:
+                    tokens = line.split()
+                    if len(tokens) and tokens[0] == 'ion':
+                        names.append(tokens[1])
+                        posns.append(np.array([float(tokens[2]), float(tokens[3]), float(tokens[4])]))
+                        if tokens[1] not in idxMap:
+                            idxMap[tokens[1]] = []
+                        idxMap[tokens[1]].append(j)
+                        j += 1
+                    else:
+                        posns = np.array(posns)
+                        active_posns = False
+                        nAtoms = len(names)
+                        if len(charges) < nAtoms:
+                            charges = np.zeros(nAtoms)
+                ##########
+                elif active_forces:
+                    tokens = line.split()
+                    if len(tokens) and tokens[0] == 'force':
+                        forces.append(np.array([float(tokens[2]), float(tokens[3]), float(tokens[4])]))
+                    else:
+                        forces = np.array(forces)
+                        active_forces = False
+                ##########
+                elif "Minimize: Iter:" in line:
+                    if "F: " in line:
+                        E = float(line[line.index("F: "):].split(' ')[1])
+                    elif "G: " in line:
+                        E = float(line[line.index("G: "):].split(' ')[1])
+                elif active_lowdin:
+                    if charge_key in line:
+                        look = line.rstrip('\n')[line.index(charge_key):].split(' ')
+                        symbol = str(look[1])
+                        line_charges = [float(val) for val in look[2:]]
+                        chargeDir[symbol] = line_charges
+                        for atom in list(chargeDir.keys()):
+                            for k, idx in enumerate(idxMap[atom]):
+                                charges[idx] += chargeDir[atom][k]
+                    elif "#" not in line:
+                        active_lowdin = False
+                        log_vars = True
+                elif log_vars:
+                    if np.sum(R) == 0.0:
+                        R = get_input_coord_vars_from_outfile(outfile)[2]
+                    if coords != 'cartesian':
+                        posns = np.dot(posns, R)
+                    if len(forces) == 0:
+                        forces = np.zeros([nAtoms, 3])
+                    if coords_forces.lower() != 'cartesian':
+                        forces = np.dot(forces, R)
+                    opts.append(get_atoms_from_outfile_data(names, posns, R, charges=charges, E=E, momenta=forces))
+                    R, posns, names, chargeDir, active_posns, active_lowdin, active_lattice, posns, coords, idxMap, j, lat_row, \
+                        new_posn, log_vars, E, charges, forces, active_forces, coords_forces = get_atoms_list_from_out_reset_vars(
+                        nAtoms=nAtoms)
+            elif "Computing DFT-D3 correction:" in line:
+                new_posn = True
+    return opts

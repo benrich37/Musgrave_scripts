@@ -20,6 +20,7 @@ def align_yaxis(ax1, ax2):
     axes[0].set_ylim(extrema[0][0], b_new_t)
     axes[1].set_ylim(t_new_b, extrema[1][1])
 
+
 def get_integrated_array(ygrid, dx):
     integrated_array = []
     cur = 0
@@ -37,6 +38,7 @@ def get_integrated_trapezoidal(ygrid, xgrid):
     for i in range(len(ygrid) - 2):
         dx = (xgrid[i + 2] - xgrid[i])/2.
         integrated_array.append(cur + (ygrid))
+    return np.array(integrated_array)
 
 
 def ez_pCOHP_sum(uorb_list, vorb_list, Egrid, Emin, Emax, dE, pCOHP_func):
